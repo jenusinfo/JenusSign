@@ -18,6 +18,7 @@ import ProposalDetailsPage from '../modules/noncustomer-portal/pages/ProposalDet
 import ProposalCreatePage from '../modules/noncustomer-portal/pages/ProposalCreatePage'
 import ProposalAuditPage from '../modules/noncustomer-portal/pages/ProposalAuditPage'
 import SettingsPage from '../modules/noncustomer-portal/pages/SettingsPage'
+import CustomerVerificationPage from '../modules/customer-portal/pages/CustomerVerificationPage'
 
 export default function AppRouter() {
   return (
@@ -27,7 +28,8 @@ export default function AppRouter() {
 
       {/* Customer Portal Routes */}
       <Route path="/customer/login" element={<CustomerLoginPage />} />
-      <Route path="/customer/sign/:token" element={<CustomerProposalSignPage />} />
+      <Route path="/customer/sign/:token" element={<CustomerVerificationPage />} />
+
       <Route
         path="/customer/dashboard"
         element={

@@ -1,12 +1,13 @@
 import httpClient from './httpClient'
 
+
 const MOCK_MODE = true
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Mock proposals data
 const mockProposals = [
   {
-    id: 'p1',
+    id: 'prop-001',
     customerId: 'c1',
     insuranceCoreProposalId: 'PROP12345',
     proposalRef: 'PR-2025-0001',
@@ -17,28 +18,28 @@ const mockProposals = [
     lastActivityAt: '2025-11-11T08:30:00Z',
     expiryDate: '2025-12-01T00:00:00Z',
     createdByUserId: '2',
-    consents: [
+	consents: [
       {
-        proposalConsentId: 'pc1',
-        consentDefinitionId: 'cd1',
+        proposalConsentId: 'pc-001',
+        consentDefinitionId: 'cd-001',
         label: 'I accept the Terms & Conditions',
         controlType: 'Checkbox',
         isRequired: true,
         value: null,
       },
       {
-        proposalConsentId: 'pc2',
-        consentDefinitionId: 'cd2',
-        label: 'I consent to receiving marketing communications',
+        proposalConsentId: 'pc-002',
+        consentDefinitionId: 'cd-002',
+        label: 'I accept the Privacy Policy',
         controlType: 'Checkbox',
-        isRequired: false,
+        isRequired: true,
         value: null,
       },
     ],
     signatureStatus: 'NotCaptured',
   },
   {
-    id: 'p2',
+    id: 'prop-002',
     customerId: 'c1',
     insuranceCoreProposalId: 'PROP12346',
     proposalRef: 'PR-2025-0002',
@@ -49,10 +50,10 @@ const mockProposals = [
     lastActivityAt: '2025-11-14T16:45:00Z',
     expiryDate: '2025-11-30T00:00:00Z',
     createdByUserId: '2',
-    consents: [
+	consents: [
       {
-        proposalConsentId: 'pc3',
-        consentDefinitionId: 'cd1',
+        proposalConsentId: 'pc-003',
+        consentDefinitionId: 'cd-001',
         label: 'I accept the Terms & Conditions',
         controlType: 'Checkbox',
         isRequired: true,
@@ -62,7 +63,7 @@ const mockProposals = [
     signatureStatus: 'Captured',
   },
   {
-    id: 'p3',
+    id: 'prop-003',
     customerId: 'c1',
     insuranceCoreProposalId: 'PROP12347',
     proposalRef: 'PR-2025-0003',
@@ -77,6 +78,7 @@ const mockProposals = [
     signatureStatus: 'Completed',
   },
 ]
+
 
 const proposalsApi = {
   // Get all proposals (non-customer portal)
@@ -248,20 +250,38 @@ const proposalsApi = {
   },
 
   // Customer portal: Verify signing OTP (final sign)
-  async verifySigningOtp(proposalId, otp) {
-    if (MOCK_MODE) {
-      await delay(1500) // Simulate PDF signing process
-      if (otp === '123456') {
-        return {
-          success: true,
-          status: 'Signed',
-          finalDocumentId: `final-doc-${Date.now()}`,
-        }
-      }
-      throw new Error('Invalid OTP')
-    }
-    return httpClient.post(`/customer/proposals/${proposalId}/verify-signing-otp`, { otp })
-  },
+  // Customer portal: Verify signing OTP (final sign)
+	async verifySigningOtp(proposalId, otp) {
+	  if (MOCK_MODE) {
+		await delay(1500) // Simulate PDF signing process
+
+		const proposal = mockProposals.find((p) => p.id === proposalId)
+
+		if (!proposal) {
+		  throw new Error('Proposal not found')
+		}
+
+		if (otp === '123456') {
+		  const now = new Date().toISOString()
+
+		  // ✅ update in-memory proposal so UI sees "Signed"
+		  proposal.status = 'Signed'
+		  proposal.signatureStatus = 'Completed'
+		  proposal.lastActivityAt = now
+
+		  return {
+			success: true,
+			status: proposal.status,
+			finalDocumentId: `final-doc-${Date.now()}`,
+		  }
+		}
+
+		throw new Error('Invalid OTP')
+	  }
+
+	  return httpClient.post(`/customer/proposals/${proposalId}/verify-signing-otp`, { otp })
+	},
+
 
   // Get proposal document
   async getDocument(proposalId) {

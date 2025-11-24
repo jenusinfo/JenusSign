@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # JenusSign Frontend v1.2.0
 ## Business Keys & Broker-Agent Hierarchy
 
@@ -346,3 +347,6 @@ Status: Production Ready Frontend
 - **Loading states** throughout
 - **Responsive design** for all screen sizes
 
+=======
+# JenusSign
+>>>>>>> 5842c04b61fd76b090ed9b448f7a3ff355c2bf4f

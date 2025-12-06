@@ -1190,8 +1190,9 @@ const CustomerVerificationPage = () => {
           maxDate={new Date()}
           minDate={new Date('1900-01-01')}
           placeholderText="Select your date of birth"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
           wrapperClassName="w-full"
+          readOnly
           required
         />
       </div>
@@ -1257,8 +1258,9 @@ const CustomerVerificationPage = () => {
           maxDate={new Date()}
           minDate={new Date('1900-01-01')}
           placeholderText="Select registration date"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
           wrapperClassName="w-full"
+          readOnly
           required
         />
       </div>

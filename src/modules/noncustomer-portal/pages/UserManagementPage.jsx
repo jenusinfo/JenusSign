@@ -6,6 +6,15 @@ import { Users, Plus, Shield, UserCircle, Building2, Search } from 'lucide-react
 import { usersApi } from '../../../api/mockApi'
 import useAuthStore from '../../../stores/authStore'
 
+const StatCard = ({ label, value, icon }) => (
+  <div className="p-4 bg-white rounded-xl border flex items-center gap-3">
+    <div className="p-3 bg-gray-100 rounded-lg text-gray-600">{icon}</div>
+    <div>
+      <p className="text-gray-500 text-sm">{label}</p>
+      <p className="text-xl font-bold text-gray-900">{value}</p>
+    </div>
+  </div>
+);
 const roleIcons = {
   Admin: Shield,
   Employee: UserCircle,
@@ -21,20 +30,31 @@ const roleColors = {
 }
 
 const UserManagementPage = () => {
-  const navigate = useNavigate()
-  const { user, isAdmin } = useAuthStore()
+  console.log('🔍 UserManagementPage loading...')
+
+  const navigate = useNavigate();
+  const auth = useAuthStore();
+  
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
 
-  // Redirect if not admin
-  if (!isAdmin()) {
+  const user = auth.user;
+  const isAdmin =
+    typeof auth.isAdmin === "function"
+      ? auth.isAdmin()
+      : user?.role === "Admin";
+
+  // Restrict access
+  if (!isAdmin) {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">Access Denied. Only administrators can access user management.</p>
+          <p className="text-red-800">
+            Access Denied. Only administrators can access user management.
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   const { data, isLoading } = useQuery({

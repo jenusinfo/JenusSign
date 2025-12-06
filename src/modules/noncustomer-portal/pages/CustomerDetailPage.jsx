@@ -8,7 +8,10 @@ import { customersApi } from '../../../api/mockApi'
 import useAuthStore from '../../../stores/authStore'
 
 const CustomerDetailPage = () => {
-  const { id } = useParams()
+  // match the param name in the route: /portal/customers/:customerId
+  const { customerId } = useParams()
+  const id = customerId
+
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user, isAdmin, isEmployee } = useAuthStore()
@@ -22,6 +25,7 @@ const CustomerDetailPage = () => {
       setFormData(data)
     },
   })
+
 
   const updateMutation = useMutation({
     mutationFn: (data) => customersApi.updateCustomer(id, data),
@@ -352,33 +356,34 @@ const CustomerDetailPage = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assigned Agent
+                Assigned Agent
                 </label>
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <div className="text-sm font-medium text-gray-900">
-                    {customer.assignedAgent.displayName}
+                    {customer.assignedAgent?.displayName || 'No agent assigned'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {customer.assignedAgent.businessKey}
+                    {customer.assignedAgent?.businessKey || '—'}
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assigned Broker
-                </label>
-                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div className="text-sm font-medium text-gray-900">
-                    {customer.assignedBroker.displayName}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {customer.assignedBroker.businessKey}
-                  </div>
+               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Assigned Broker
+              </label>
+              <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <div className="text-sm font-medium text-gray-900">
+                  {customer.assignedBroker?.displayName || 'No broker assigned'}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {customer.assignedBroker?.businessKey || '—'}
                 </div>
               </div>
-            </div>
+             </div>
+             </div>
           </motion.div>
+          
 
           {/* Metadata */}
           <motion.div

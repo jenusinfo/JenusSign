@@ -2,6 +2,7 @@
 // Enhanced version with customerProposalsApi for Customer Portal
 
 // Demo Users Database
+
 const DEMO_USERS = [
   {
     id: 'user-admin-001',
@@ -343,23 +344,107 @@ export const customerProposalsApi = {
     return proposal
   }
 }
+// ============================================
+// DEMO SIGNING SESSIONS - Multiple tokens for prospect demos
+// ============================================
+const DEMO_SIGNING_SESSIONS = {
+  // Token 1: Yiannis Kleanthous (Default demo)
+  'demo1': {
+    token: 'demo1',
+    proposalId: 'prop-001',
+    proposalTitle: 'Home Insurance Proposal',
+    customerType: 'INDIVIDUAL',
+    customerName: 'Yiannis Kleanthous',
+    prefilledEmail: 'yiannis.kleanthous@hydrainsurance.com.cy',
+    prefilledMobile: '+357 99 123456',
+    expectedDateOfBirth: '1985-03-12',
+    expectedIdNumber: 'X1234567',
+    eidData: {
+      name: 'Yiannis Kleanthous',
+      idNumber: 'X1234567',
+      dateOfBirth: '12 March 1985',
+      email: 'yiannis.kleanthous@hydrainsurance.com.cy'
+    }
+  },
+  // Token 2: Charis Constantinou (Second demo user)
+  'demo2': {
+    token: 'demo2',
+    proposalId: 'prop-001',
+    proposalTitle: 'Home Insurance Proposal',
+    customerType: 'INDIVIDUAL',
+    customerName: 'Charis Constantinou',
+    prefilledEmail: 'charis.constantinou@hydrainsurance.com.cy',
+    prefilledMobile: '+357 99 654321',
+    expectedDateOfBirth: '1990-07-22',
+    expectedIdNumber: 'M7654321',
+    eidData: {
+      name: 'Charis Constantinou',
+      idNumber: 'M7654321',
+      dateOfBirth: '22 July 1990',
+      email: 'charis.constantinou@hydrainsurance.com.cy'
+    }
+  },
+  // Token 3: Nikos Papadopoulos (Third demo user)
+  'demo3': {
+    token: 'demo3',
+    proposalId: 'prop-002',
+    proposalTitle: 'Motor Insurance Proposal',
+    customerType: 'INDIVIDUAL',
+    customerName: 'Nikos Papadopoulos',
+    prefilledEmail: 'nikos.p@example.com',
+    prefilledMobile: '+357 99 789012',
+    expectedDateOfBirth: '1978-11-05',
+    expectedIdNumber: 'N9876543',
+    eidData: {
+      name: 'Nikos Papadopoulos',
+      idNumber: 'N9876543',
+      dateOfBirth: '5 November 1978',
+      email: 'nikos.p@example.com'
+    }
+  },
+  // Token 4: Business user - Tech Solutions
+  'business1': {
+    token: 'business1',
+    proposalId: 'prop-005',
+    proposalTitle: 'Business Liability Insurance',
+    customerType: 'BUSINESS',
+    customerName: 'Tech Solutions Ltd',
+    companyName: 'Tech Solutions Ltd',
+    prefilledEmail: 'info@techsolutions.cy',
+    prefilledMobile: '+357 22 123456',
+    expectedRegistrationNumber: 'HE123456',
+    eidData: {
+      name: 'Tech Solutions Ltd',
+      registrationNumber: 'HE123456',
+      email: 'info@techsolutions.cy'
+    }
+  }
+}
+
+// Default session for unknown tokens (falls back to Andreas)
+const DEFAULT_SIGNING_SESSION = DEMO_SIGNING_SESSIONS['demo1']
+
 export const signingSessionsApi = {
+  /**
+   * Get session by token
+   * Supported demo tokens:
+   * - demo1: Andreas Constantinou (default)
+   * - demo2: Maria Georgiou
+   * - demo3: Nikos Papadopoulos
+   * - business1: Tech Solutions Ltd
+   * 
+   * Any other token will return the default (Andreas) session
+   */
   async getSessionByToken(token) {
     await delay(300)
 
-    // For demo, return a rich session object
-    return {
-      token,
-      proposalId: 'prop-001',
-      proposalTitle: 'Home Insurance Proposal',
-      customerType: 'INDIVIDUAL', // or 'BUSINESS'
-      customerName: 'Andreas Constantinou',
-      prefilledEmail: 'andreas@example.com',
-      prefilledMobile: '+357 99 123456',
-      // Additional fields for verification
-      expectedDateOfBirth: '1985-03-12',
-      expectedIdNumber: 'K123456',
+    // Look up the token in our demo sessions
+    const session = DEMO_SIGNING_SESSIONS[token] || {
+      ...DEFAULT_SIGNING_SESSION,
+      token: token // Keep the original token
     }
+
+    return session
   },
 
   async verifyIdentity(token, payload) {
@@ -431,6 +516,17 @@ export const customersApi = {
       pageSize
     }
   },
+  async getCustomer(id) {
+      await delay()
+
+      const customer = DEMO_CUSTOMERS.find((c) => c.id === id)
+
+      if (!customer) {
+        throw new Error('Customer not found')
+      }
+
+      return customer
+    },
 
   async getCustomerById(id) {
     await delay()
@@ -499,6 +595,18 @@ export const proposalsApi = {
       pageSize
     }
   },
+  
+  async getProposal(id) {
+      await delay()
+
+      const proposal = DEMO_PROPOSALS.find((p) => p.id === id)
+
+      if (!proposal) {
+        throw new Error('Proposal not found')
+      }
+
+      return proposal
+    },
 
   async getProposalById(id) {
     await delay()
@@ -579,29 +687,156 @@ export const proposalsApi = {
 
 // Users API
 export const usersApi = {
-  async getUsers({ role, page = 1, pageSize = 10 } = {}) {
-    await delay()
-    
-    let items = [...DEMO_USERS]
-    
+  async getUsers({ search, role, assignedBrokerId, page = 1, pageSize = 10 } = {}) {
+    await delay();
+
+    let items = [...DEMO_USERS];
+
+    // Filter by role (Admin / Employee / Broker / Agent)
     if (role) {
-      items = items.filter(u => u.role === role)
+      items = items.filter((u) => u.role === role);
     }
 
-    return {
-      items: items.map(u => ({
-        id: u.id,
-        displayName: u.displayName,
-        email: u.email,
-        role: u.role,
-        businessKey: u.businessKey
-      })),
-      totalCount: items.length,
-      page,
-      pageSize
+    // Filter agents by assigned broker (for broker views)
+    if (assignedBrokerId) {
+      items = items.filter((u) => u.assignedBrokerId === assignedBrokerId);
     }
-  }
-}
+
+    // Text search on name, email, business key
+    if (search) {
+      const s = search.toLowerCase();
+      items = items.filter(
+        (u) =>
+          u.displayName.toLowerCase().includes(s) ||
+          u.email.toLowerCase().includes(s) ||
+          u.businessKey.toLowerCase().includes(s)
+      );
+    }
+
+    // Build lookup for brokers (for agents' broker info)
+    const brokerLookup = Object.fromEntries(
+      DEMO_USERS
+        .filter((u) => u.role === 'Broker')
+        .map((b) => [
+          b.id,
+          {
+            id: b.id,
+            displayName: b.displayName,
+            email: b.email,
+            businessKey: b.businessKey,
+          },
+        ])
+    );
+
+    const mapped = items.map((u, idx) => ({
+      id: u.id,
+      displayName: u.displayName,
+      email: u.email,
+      role: u.role,
+      businessKey: u.businessKey,
+      assignedBrokerId: u.assignedBrokerId || null,
+      broker: u.assignedBrokerId ? brokerLookup[u.assignedBrokerId] || null : null,
+      isActive: true,
+      createdAt: u.createdAt || new Date(2024, 10, 1 + idx).toISOString(),
+    }));
+
+    const statistics = {
+      totalUsers: mapped.length,
+      totalAdmins: mapped.filter((u) => u.role === 'Admin').length,
+      totalEmployees: mapped.filter((u) => u.role === 'Employee').length,
+      totalAgents: mapped.filter((u) => u.role === 'Agent').length,
+      totalBrokers: mapped.filter((u) => u.role === 'Broker').length,
+    };
+
+    return {
+      items: mapped,
+      totalCount: mapped.length,
+      page,
+      pageSize,
+      statistics,
+    };
+  },
+
+
+    async getUser(id) {
+    await delay();
+    const u = DEMO_USERS.find((x) => x.id === id);
+    if (!u) {
+      throw new Error('User not found');
+    }
+
+    const brokerLookup = Object.fromEntries(
+      DEMO_USERS
+        .filter((x) => x.role === 'Broker')
+        .map((b) => [
+          b.id,
+          {
+            id: b.id,
+            displayName: b.displayName,
+            email: b.email,
+            businessKey: b.businessKey,
+          },
+        ])
+    );
+
+    return {
+      id: u.id,
+      displayName: u.displayName,
+      email: u.email,
+      role: u.role,
+      businessKey: u.businessKey,
+      assignedBrokerId: u.assignedBrokerId || null,
+      broker: u.assignedBrokerId ? brokerLookup[u.assignedBrokerId] || null : null,
+      isActive: true,
+      createdAt: u.createdAt || new Date(2024, 10, 1).toISOString(),
+    };
+  },
+
+
+  async getBrokers() {
+    await delay();
+    const brokers = DEMO_USERS.filter((u) => u.role === 'Broker');
+    return brokers.map((b) => ({
+      id: b.id,
+      displayName: b.displayName,
+      email: b.email,
+      businessKey: b.businessKey,
+    }));
+  },
+
+  async createUser(data) {
+    await delay();
+
+    const id = `user-${Date.now()}`;
+    const newUser = {
+      id,
+      email: data.email,
+      password: data.password || 'demo123',
+      displayName:
+        data.displayName ||
+        data.fullName ||
+        (data.email ? data.email.split('@')[0] : 'New User'),
+      role: data.role || 'Employee',
+      businessKey: data.businessKey || (data.role || 'USR').slice(0, 3).toUpperCase() + '-' + id.slice(-3),
+      assignedBrokerId: data.assignedBrokerId || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    DEMO_USERS.push(newUser);
+
+    return {
+      id: newUser.id,
+      displayName: newUser.displayName,
+      email: newUser.email,
+      role: newUser.role,
+      businessKey: newUser.businessKey,
+      broker: null,
+      isActive: true,
+      createdAt: newUser.createdAt,
+    };
+  },
+};
+
 
 // Settings API
 export const settingsApi = {
@@ -666,3 +901,8 @@ console.log('📧 Demo Portal Login: admin@insurance.com / admin123')
 console.log('🔑 Demo OTP: 123456')
 console.log('👤 Demo Customer: john.doe@example.com (or any email)')
 console.log('📋 Demo Proposals: 5 proposals available')
+console.log('🔗 Demo Signing Tokens:')
+console.log('   - demo1: Andreas Constantinou')
+console.log('   - demo2: Maria Georgiou')
+console.log('   - demo3: Nikos Papadopoulos')
+console.log('   - business1: Tech Solutions Ltd')

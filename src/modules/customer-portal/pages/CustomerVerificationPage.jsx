@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -58,8 +58,12 @@ const CustomerVerificationPage = () => {
   const [captureMode, setCaptureMode] = useState('upload') // 'upload' | 'camera'
   const [cameraError, setCameraError] = useState(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [cameraReady, setCameraReady] = useState(false)
   
-  const fileInputRef = useRef(null)
+  // Separate refs for each file input to avoid conflicts
+  const frontFileInputRef = useRef(null)
+  const backFileInputRef = useRef(null)
+  const selfieFileInputRef = useRef(null)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -140,13 +144,15 @@ const CustomerVerificationPage = () => {
 
   // ===== Camera Functions =====
   
-  const startCamera = async (forSelfie = false) => {
+  const startCamera = useCallback(async (forSelfie = false) => {
     try {
       setCameraError(null)
+      setCameraReady(false)
       
       // Stop any existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
       }
 
       const constraints = {
@@ -160,6 +166,9 @@ const CustomerVerificationPage = () => {
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
       
+      // Small delay to ensure video element is mounted
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         videoRef.current.setAttribute('playsinline', 'true')
@@ -168,11 +177,28 @@ const CustomerVerificationPage = () => {
         
         // Wait for video to be ready
         videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play().catch(console.error)
+          videoRef.current.play()
+            .then(() => {
+              setCameraReady(true)
+              setCameraActive(true)
+            })
+            .catch(err => {
+              console.error('Video play error:', err)
+              setCameraError('Could not start video playback')
+            })
         }
+      } else {
+        // Video ref not ready yet, try again after a short delay
+        setTimeout(() => {
+          if (videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current
+            videoRef.current.play().catch(console.error)
+            setCameraReady(true)
+            setCameraActive(true)
+          }
+        }, 200)
       }
       
-      setCameraActive(true)
       toast.success(`Camera activated (${forSelfie ? 'front' : 'rear'})`)
     } catch (err) {
       console.error('Camera error:', err)
@@ -187,9 +213,9 @@ const CustomerVerificationPage = () => {
         toast.error('Could not access camera. Please use upload mode.')
       }
     }
-  }
+  }, [])
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
@@ -198,9 +224,10 @@ const CustomerVerificationPage = () => {
       videoRef.current.srcObject = null
     }
     setCameraActive(false)
-  }
+    setCameraReady(false)
+  }, [])
 
-  const capturePhoto = () => {
+  const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return null
 
     const video = videoRef.current
@@ -213,32 +240,33 @@ const CustomerVerificationPage = () => {
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
     
     return canvas.toDataURL('image/jpeg', 0.9)
-  }
+  }, [])
 
-  const handleCameraCapture = (type) => {
+  // FIX: Don't reset captureMode to 'upload' after capturing
+  // Keep the camera mode so subsequent steps also use camera
+  const handleCameraCapture = useCallback((type) => {
     const imageData = capturePhoto()
     if (!imageData) {
       toast.error('Could not capture image')
       return
     }
 
+    // Stop camera after capture but keep captureMode as 'camera'
+    stopCamera()
+
     if (type === 'front') {
       setIdFrontImage(imageData)
       toast.success('Front ID captured!')
-      stopCamera()
-      setCaptureMode('upload')
     } else if (type === 'back') {
       setIdBackImage(imageData)
       toast.success('Back ID captured!')
-      stopCamera()
-      setCaptureMode('upload')
     } else if (type === 'selfie') {
       setSelfieImage(imageData)
       toast.success('Selfie captured!')
-      stopCamera()
-      setCaptureMode('upload')
     }
-  }
+    // Note: We intentionally do NOT set setCaptureMode('upload') here
+    // so that the next step continues with camera mode
+  }, [capturePhoto, stopCamera])
 
   const handleFileSelect = (e, type) => {
     const file = e.target.files?.[0]
@@ -259,15 +287,24 @@ const CustomerVerificationPage = () => {
       }
     }
     reader.readAsDataURL(file)
+    
+    // Reset the input so the same file can be selected again if needed
+    e.target.value = ''
   }
 
   const retakePhoto = (type) => {
     if (type === 'front') setIdFrontImage(null)
     else if (type === 'back') setIdBackImage(null)
     else if (type === 'selfie') setSelfieImage(null)
+    
+    // If in camera mode, restart the camera for retake
+    if (captureMode === 'camera') {
+      const forSelfie = type === 'selfie'
+      startCamera(forSelfie)
+    }
   }
 
-  const toggleCaptureMode = (mode, forSelfie = false) => {
+  const toggleCaptureMode = useCallback((mode, forSelfie = false) => {
     if (mode === 'camera') {
       setCaptureMode('camera')
       startCamera(forSelfie)
@@ -275,14 +312,26 @@ const CustomerVerificationPage = () => {
       setCaptureMode('upload')
       stopCamera()
     }
-  }
+  }, [startCamera, stopCamera])
+
+  // Handle advancing to next step - maintain camera mode if applicable
+  const advanceToNextStep = useCallback((nextStep, forSelfie = false) => {
+    setScanningStep(nextStep)
+    // If we're in camera mode, start the camera for the next step
+    if (captureMode === 'camera') {
+      // Small delay to ensure the DOM updates with the new step's video element
+      setTimeout(() => {
+        startCamera(forSelfie)
+      }, 100)
+    }
+  }, [captureMode, startCamera])
 
   // Cleanup camera on unmount
   useEffect(() => {
     return () => {
       stopCamera()
     }
-  }, [])
+  }, [stopCamera])
 
   // Process ID images (simulated OCR)
   const processIdImages = async () => {
@@ -292,11 +341,11 @@ const CustomerVerificationPage = () => {
     // Simulated OCR processing
     await new Promise(resolve => setTimeout(resolve, 1500))
     
-    // Simulated extracted data
+    // Simulated extracted data - use session data when available
     const mockExtractedData = {
       fullName: session?.customerName || 'ANDREAS CONSTANTINOU',
-      idNumber: 'K' + Math.floor(100000 + Math.random() * 900000),
-      dateOfBirth: '1985-03-12',
+      idNumber: session?.eidData?.idNumber || session?.expectedIdNumber || ('K' + Math.floor(100000 + Math.random() * 900000)),
+      dateOfBirth: session?.expectedDateOfBirth || '1985-03-12',
       nationality: 'CYP',
       expiryDate: '2028-03-15',
       faceMatchScore: 98.5,
@@ -402,8 +451,8 @@ const CustomerVerificationPage = () => {
 
     const eidPayload = {
       fullName: session.customerName || 'Cyprus eID Demo User',
-      nationalId: 'X1234567',
-      dateOfBirth: '1985-03-12',
+      nationalId: session.eidData?.idNumber || session.expectedIdNumber || 'X1234567',
+      dateOfBirth: session.expectedDateOfBirth || '1985-03-12',
       email: session.prefilledEmail || 'eid.user@example.com',
       mobile: session.prefilledMobile || '+357 99 123456',
     }
@@ -590,20 +639,23 @@ const CustomerVerificationPage = () => {
               {captureMode === 'upload' ? (
                 <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
                   <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  {/* FIX: Removed capture attribute to allow file picker on mobile */}
                   <input
-                    ref={fileInputRef}
+                    ref={frontFileInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     onChange={(e) => handleFileSelect(e, 'front')}
                     className="hidden"
                   />
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => frontFileInputRef.current?.click()}
                     className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
                   >
                     Choose Photo
                   </button>
+                  <p className="text-xs text-gray-500 mt-3">
+                    Select an existing photo from your device
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -616,6 +668,15 @@ const CustomerVerificationPage = () => {
                       className="w-full h-full object-cover"
                       style={{ transform: 'scaleX(1)' }}
                     />
+                    {/* Loading indicator while camera initializes */}
+                    {!cameraReady && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80">
+                        <div className="text-center">
+                          <RefreshCw className="w-8 h-8 text-white animate-spin mx-auto mb-2" />
+                          <p className="text-white text-sm">Starting camera...</p>
+                        </div>
+                      </div>
+                    )}
                     {/* ID Card overlay guide */}
                     <div className="absolute inset-4 border-2 border-white/50 rounded-lg pointer-events-none">
                       <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-white" />
@@ -627,10 +688,16 @@ const CustomerVerificationPage = () => {
                       Position ID card within the frame
                     </div>
                   </div>
+                  {cameraError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                      <AlertCircle className="w-4 h-4 inline mr-2" />
+                      {cameraError}
+                    </div>
+                  )}
                   <button
                     onClick={() => handleCameraCapture('front')}
-                    disabled={!cameraActive}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                    disabled={!cameraReady}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Camera className="w-4 h-4 inline mr-2" />
                     Capture Photo
@@ -650,7 +717,7 @@ const CustomerVerificationPage = () => {
                   Retake
                 </button>
                 <button
-                  onClick={() => setScanningStep('back')}
+                  onClick={() => advanceToNextStep('back', false)}
                   className="px-6 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700"
                 >
                   Continue
@@ -706,20 +773,23 @@ const CustomerVerificationPage = () => {
               {captureMode === 'upload' ? (
                 <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
                   <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  {/* FIX: Removed capture attribute to allow file picker on mobile */}
                   <input
+                    ref={backFileInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     onChange={(e) => handleFileSelect(e, 'back')}
                     className="hidden"
-                    id="back-upload"
                   />
                   <button
-                    onClick={() => document.getElementById('back-upload')?.click()}
+                    onClick={() => backFileInputRef.current?.click()}
                     className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
                   >
                     Choose Photo
                   </button>
+                  <p className="text-xs text-gray-500 mt-3">
+                    Select an existing photo from your device
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -731,6 +801,15 @@ const CustomerVerificationPage = () => {
                       muted
                       className="w-full h-full object-cover"
                     />
+                    {/* Loading indicator while camera initializes */}
+                    {!cameraReady && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80">
+                        <div className="text-center">
+                          <RefreshCw className="w-8 h-8 text-white animate-spin mx-auto mb-2" />
+                          <p className="text-white text-sm">Starting camera...</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="absolute inset-4 border-2 border-white/50 rounded-lg pointer-events-none">
                       <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-white" />
                       <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-white" />
@@ -741,10 +820,16 @@ const CustomerVerificationPage = () => {
                       Position ID card within the frame
                     </div>
                   </div>
+                  {cameraError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                      <AlertCircle className="w-4 h-4 inline mr-2" />
+                      {cameraError}
+                    </div>
+                  )}
                   <button
                     onClick={() => handleCameraCapture('back')}
-                    disabled={!cameraActive}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                    disabled={!cameraReady}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Camera className="w-4 h-4 inline mr-2" />
                     Capture Photo
@@ -764,10 +849,7 @@ const CustomerVerificationPage = () => {
                   Retake
                 </button>
                 <button
-                  onClick={() => {
-                    setScanningStep('selfie')
-                    setCaptureMode('upload')
-                  }}
+                  onClick={() => advanceToNextStep('selfie', true)}
                   className="px-6 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700"
                 >
                   Continue
@@ -823,20 +905,23 @@ const CustomerVerificationPage = () => {
               {captureMode === 'upload' ? (
                 <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
                   <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  {/* FIX: Removed capture attribute to allow file picker on mobile */}
                   <input
+                    ref={selfieFileInputRef}
                     type="file"
                     accept="image/*"
-                    capture="user"
                     onChange={(e) => handleFileSelect(e, 'selfie')}
                     className="hidden"
-                    id="selfie-upload"
                   />
                   <button
-                    onClick={() => document.getElementById('selfie-upload')?.click()}
+                    onClick={() => selfieFileInputRef.current?.click()}
                     className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
                   >
                     Choose Photo
                   </button>
+                  <p className="text-xs text-gray-500 mt-3">
+                    Select an existing selfie from your device
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -849,6 +934,15 @@ const CustomerVerificationPage = () => {
                       className="w-full h-full object-cover"
                       style={{ transform: 'scaleX(-1)' }}
                     />
+                    {/* Loading indicator while camera initializes */}
+                    {!cameraReady && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80">
+                        <div className="text-center">
+                          <RefreshCw className="w-8 h-8 text-white animate-spin mx-auto mb-2" />
+                          <p className="text-white text-sm">Starting camera...</p>
+                        </div>
+                      </div>
+                    )}
                     {/* Face oval guide */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-48 h-64 border-4 border-white/50 rounded-full" />
@@ -857,10 +951,16 @@ const CustomerVerificationPage = () => {
                       Position your face within the oval
                     </div>
                   </div>
+                  {cameraError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                      <AlertCircle className="w-4 h-4 inline mr-2" />
+                      {cameraError}
+                    </div>
+                  )}
                   <button
                     onClick={() => handleCameraCapture('selfie')}
-                    disabled={!cameraActive}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                    disabled={!cameraReady}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Camera className="w-4 h-4 inline mr-2" />
                     Capture Selfie
@@ -948,7 +1048,7 @@ const CustomerVerificationPage = () => {
 
           <button
             onClick={handleIdScanComplete}
-            className="mt-6 w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-700 transition-all"
+            className="mt-6 px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
           >
             Continue to Contact Verification
             <ChevronRight className="w-4 h-4 inline ml-2" />
@@ -956,204 +1056,226 @@ const CustomerVerificationPage = () => {
         </div>
       )}
 
-      {/* Back button */}
-      <button
-        onClick={() => {
-          stopCamera()
-          setVerificationMethod(null)
-          setScanningStep('front')
-          setIdFrontImage(null)
-          setIdBackImage(null)
-          setSelfieImage(null)
-          setExtractedData(null)
-        }}
-        className="mt-4 text-sm text-gray-500 hover:text-gray-700"
-      >
-        ← Choose different method
-      </button>
+      {/* Back button for ID scanning steps */}
+      {['front', 'back', 'selfie'].includes(scanningStep) && (
+        <button
+          onClick={() => {
+            stopCamera()
+            setVerificationMethod(null)
+            setScanningStep('front')
+            setIdFrontImage(null)
+            setIdBackImage(null)
+            setSelfieImage(null)
+            setCaptureMode('upload')
+          }}
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mt-4"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to verification options
+        </button>
+      )}
     </div>
   )
 
-  // Manual verification form
-  const ManualVerificationForm = () => (
+  // Manual Entry Form for Individuals
+  const ManualEntryForm = () => (
     <form onSubmit={handleIdentitySubmit} className="space-y-4 text-sm">
-      <p className="text-xs text-gray-600 mb-2">
-        Please confirm a few details so we know it's you.
-      </p>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
+          <Calendar className="w-4 h-4 text-gray-400" />
+          Date of birth
+        </label>
+        <input
+          type="date"
+          value={form.dateOfBirth}
+          onChange={handleChange('dateOfBirth')}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          required
+        />
+      </div>
 
-      {isIndividual ? (
-        <>
-          <div className="space-y-1">
-            <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-              <Calendar className="w-4 h-4 text-gray-400" />
-              Date of birth
-            </label>
-            <input
-              type="date"
-              value={form.dateOfBirth}
-              onChange={handleChange('dateOfBirth')}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-              <IdCard className="w-4 h-4 text-gray-400" />
-              ID card number
-            </label>
-            <input
-              type="text"
-              value={form.idNumber}
-              onChange={handleChange('idNumber')}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g. X1234567"
-              required
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="space-y-1">
-            <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-              <Calendar className="w-4 h-4 text-gray-400" />
-              Date of registration / incorporation
-            </label>
-            <input
-              type="date"
-              value={form.dateOfRegistration}
-              onChange={handleChange('dateOfRegistration')}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-              <Building2 className="w-4 h-4 text-gray-400" />
-              Registration / TIN number
-            </label>
-            <input
-              type="text"
-              value={form.registrationNumber}
-              onChange={handleChange('registrationNumber')}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g. HE123456 or TIN"
-              required
-            />
-          </div>
-        </>
-      )}
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
+          <IdCard className="w-4 h-4 text-gray-400" />
+          National ID number
+        </label>
+        <input
+          type="text"
+          value={form.idNumber}
+          onChange={handleChange('idNumber')}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          placeholder="e.g. K123456"
+          required
+        />
+      </div>
+
+      <p className="text-[11px] text-gray-500 italic">
+        For this demo, any valid date and ID will succeed.
+      </p>
 
       <button
         type="submit"
         disabled={identityMutation.isLoading}
         className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
       >
-        {identityMutation.isLoading ? 'Verifying…' : 'Continue'}
+        {identityMutation.isLoading ? 'Verifying…' : 'Verify Identity'}
       </button>
 
       <button
         type="button"
         onClick={() => setVerificationMethod(null)}
-        className="w-full text-sm text-gray-500 hover:text-gray-700"
+        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
       >
-        ← Choose different method
+        <ArrowLeft className="w-4 h-4" />
+        Back to verification options
+      </button>
+    </form>
+  )
+
+  // Business Form
+  const BusinessForm = () => (
+    <form onSubmit={handleIdentitySubmit} className="space-y-4 text-sm">
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
+          <Calendar className="w-4 h-4 text-gray-400" />
+          Date of Registration
+        </label>
+        <input
+          type="date"
+          value={form.dateOfRegistration}
+          onChange={handleChange('dateOfRegistration')}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          required
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
+          <Building2 className="w-4 h-4 text-gray-400" />
+          Registration Number (ΗΕ/ΑΕ/ΟΕ/ΛΤΔ)
+        </label>
+        <input
+          type="text"
+          value={form.registrationNumber}
+          onChange={handleChange('registrationNumber')}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          placeholder="e.g. HE12345"
+          required
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
+          <IdCard className="w-4 h-4 text-gray-400" />
+          TIN (Tax Identification Number)
+        </label>
+        <input
+          type="text"
+          value={form.tin}
+          onChange={handleChange('tin')}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          placeholder="e.g. 12345678A"
+          required
+        />
+      </div>
+
+      <p className="text-[11px] text-gray-500 italic">
+        For this demo, any values will succeed.
+      </p>
+
+      <button
+        type="submit"
+        disabled={identityMutation.isLoading}
+        className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
+      >
+        {identityMutation.isLoading ? 'Verifying…' : 'Verify Business'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setVerificationMethod(null)}
+        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to verification options
       </button>
     </form>
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      {/* Top bar */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => navigate('/customer/login')}
-            className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 rounded-full border border-green-200">
-              <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
-              <span className="text-xs font-medium text-green-700">Secure Connection</span>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* Compact header */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-gray-100 px-4 py-3">
+        <div className="max-w-lg mx-auto flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-600 to-indigo-600 flex items-center justify-center">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-sm font-semibold text-gray-900">
+              Secure Verification
+            </h1>
+            <p className="text-[11px] text-gray-500">
+              {session.companyName}
+            </p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <Shield className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900">Verify Your Identity</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            {session.proposalTitle || 'Document'} for {session.customerName}
-          </p>
-        </div>
-
-        {/* Progress Steps */}
+      <main className="max-w-lg mx-auto px-4 py-6">
+        {/* Progress pills */}
         <div className="flex items-center justify-center gap-2 mb-6">
-          {['Identity', 'Contact', 'Verification'].map((label, idx) => {
-            const stepMap = ['identity', 'contact', 'otp']
-            const isActive = step === stepMap[idx]
-            const isComplete = stepMap.indexOf(step) > idx
-            return (
-              <React.Fragment key={label}>
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
-                  isActive ? 'bg-blue-100 text-blue-700' : 
-                  isComplete ? 'bg-green-100 text-green-700' : 
-                  'bg-gray-100 text-gray-500'
-                }`}>
-                  {isComplete && <Check className="w-3 h-3" />}
-                  {label}
-                </div>
-                {idx < 2 && <div className={`w-8 h-0.5 ${isComplete ? 'bg-green-300' : 'bg-gray-200'}`} />}
-              </React.Fragment>
-            )
-          })}
+          {[
+            { key: 'identity', label: 'Identity' },
+            { key: 'contact', label: 'Contact' },
+            { key: 'otp', label: 'Confirm' },
+          ].map((s, idx) => (
+            <React.Fragment key={s.key}>
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
+                  step === s.key
+                    ? 'bg-primary-600 text-white'
+                    : idx < ['identity', 'contact', 'otp'].indexOf(step)
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                {idx < ['identity', 'contact', 'otp'].indexOf(step) ? (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                ) : (
+                  <span className="w-4 text-center">{idx + 1}</span>
+                )}
+                <span className="hidden sm:inline">{s.label}</span>
+              </div>
+              {idx < 2 && <div className="w-6 h-0.5 bg-gray-200 rounded" />}
+            </React.Fragment>
+          ))}
         </div>
 
-        {/* Main Card */}
+        {/* Main content card */}
         <motion.div
           key={step + verificationMethod}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6"
+          className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5"
         >
-          {step === 'identity' && !verificationMethod && (
-            <VerificationMethodSelection />
+          {/* Step 1: Identity Verification */}
+          {step === 'identity' && (
+            <>
+              {!verificationMethod ? (
+                <VerificationMethodSelection />
+              ) : verificationMethod === 'idscan' ? (
+                <IdScanningUI />
+              ) : verificationMethod === 'manual' ? (
+                isIndividual ? <ManualEntryForm /> : <BusinessForm />
+              ) : null}
+            </>
           )}
 
-          {step === 'identity' && verificationMethod === 'idscan' && (
-            <IdScanningUI />
-          )}
-
-          {step === 'identity' && verificationMethod === 'manual' && (
-            <ManualVerificationForm />
-          )}
-
+          {/* Step 2: Contact confirmation */}
           {step === 'contact' && (
             <form onSubmit={handleSendOtp} className="space-y-4 text-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <Check className="w-4 h-4 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-green-700">Identity Verified</p>
-                  <p className="text-xs text-gray-500">
-                    {verificationMethod === 'eid' && 'via Cyprus eID'}
-                    {verificationMethod === 'idscan' && 'via ID Card Scan'}
-                    {verificationMethod === 'manual' && 'via Manual Entry'}
-                  </p>
-                </div>
-              </div>
-
               <p className="text-xs text-gray-600 mb-2">
-                Confirm how we can reach you. We'll send a one-time code to open your proposal.
+                Please confirm your contact details so we can send you a one-time code.
               </p>
 
               <div className="space-y-1">
@@ -1321,14 +1443,14 @@ const CustomerVerificationPage = () => {
                       <IdCard className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                       <div>
                         <span className="font-medium text-gray-700">ID:</span><br />
-                        <span className="text-gray-900">X1234567</span>
+                        <span className="text-gray-900">{session?.eidData?.idNumber || session?.expectedIdNumber || 'X1234567'}</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                       <div>
                         <span className="font-medium text-gray-700">Date of Birth:</span><br />
-                        <span className="text-gray-900">12 March 1985</span>
+                        <span className="text-gray-900">{session?.eidData?.dateOfBirth || '12 March 1985'}</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import SignatureEvidenceCard from './SignatureEvidenceCard'
 import SignatureCelebrationPopup from './SignatureCelebrationPopup'
+import MobileFriendlyPdfViewer from './MobileFriendlyPdfViewer'
 import { signingSessionsApi } from '../../../api/mockApi'
 
 import {
@@ -17,11 +18,41 @@ import {
   Mail,
   Download,
   User,
+  Eye,
 } from 'lucide-react'
 import proposalsApi from '../../../api/proposalsApi' // <- adjust path if needed
 import StatusBadge from '../../../shared/components/StatusBadge'
 import Loading from '../../../shared/components/Loading'
 import { formatDate } from '../../../shared/utils/formatters'
+
+// Mobile PDF Preview - Shows embedded viewer with option to open fullscreen
+const MobilePdfPreview = ({ src, title }) => {
+  return (
+    <div className="w-full overflow-hidden">
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <h3 className="text-base font-semibold text-gray-900 truncate">{title}</h3>
+        <a
+          href={src}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 flex-shrink-0"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          Fullscreen
+        </a>
+      </div>
+      
+      <div className="rounded-xl overflow-hidden border border-gray-200">
+        <MobileFriendlyPdfViewer
+          src={src}
+          title={title}
+          height="350px"
+          showDownload={true}
+        />
+      </div>
+    </div>
+  )
+}
 
 const CustomerProposalSignPage = () => {
   // We support BOTH:
@@ -121,12 +152,18 @@ const CustomerProposalSignPage = () => {
   // --------- Canvas helpers ----------
   const getPos = (e) => {
     const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
     const clientX = e.touches ? e.touches[0].clientX : e.clientX
     const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    
+    // Scale coordinates from CSS display size to canvas internal resolution
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
     }
   }
 
@@ -155,6 +192,71 @@ const CustomerProposalSignPage = () => {
     isDrawingRef.current = false
     setSignatureCaptured(true)
   }
+
+  // MOBILE FIX: Handle touch events with native listeners to prevent scroll
+  // This ensures preventDefault works (React uses passive listeners by default)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const getPos = (e) => {
+      const rect = canvas.getBoundingClientRect()
+      const touch = e.touches[0] || e.changedTouches[0]
+      if (!touch) return { x: 0, y: 0 }
+      
+      // IMPORTANT: Scale coordinates from CSS display size to canvas internal resolution
+      const scaleX = canvas.width / rect.width
+      const scaleY = canvas.height / rect.height
+      
+      return {
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY,
+      }
+    }
+
+    const handleTouchStart = (e) => {
+      e.preventDefault() // Prevent scroll
+      const ctx = canvas.getContext('2d')
+      const { x, y } = getPos(e)
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      isDrawingRef.current = true
+    }
+
+    const handleTouchMove = (e) => {
+      e.preventDefault() // Prevent scroll
+      if (!isDrawingRef.current) return
+      const ctx = canvas.getContext('2d')
+      const { x, y } = getPos(e)
+      ctx.lineTo(x, y)
+      ctx.strokeStyle = '#111827'
+      ctx.lineWidth = 2
+      ctx.lineCap = 'round'
+      ctx.stroke()
+    }
+
+    const handleTouchEnd = (e) => {
+      e.preventDefault()
+      if (!isDrawingRef.current) return
+      isDrawingRef.current = false
+      setSignatureCaptured(true)
+    }
+
+    // Attach with passive: false to allow preventDefault
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false })
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false })
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false })
+
+    return () => {
+      canvas.removeEventListener('touchstart', handleTouchStart)
+      canvas.removeEventListener('touchmove', handleTouchMove)
+      canvas.removeEventListener('touchend', handleTouchEnd)
+      canvas.removeEventListener('touchcancel', handleTouchEnd)
+    }
+  // Re-run when: tab changes, signing completes (view change), or loading finishes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSigTab, signingCompleted, isLoading])
 
   const handleClearCanvas = () => {
     if (!canvasRef.current) return
@@ -275,7 +377,7 @@ const CustomerProposalSignPage = () => {
 					<div className="flex flex-wrap gap-2">
 					  {/* Final merged PDF (proposal + audit page) */}
 					  <a
-						href={signedPdfUrl} // this should be the merged final PDF
+						href="/samples/demo-signed-esealed.pdf"
 						target="_blank"
 						rel="noreferrer"
 						className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium"
@@ -284,37 +386,15 @@ const CustomerProposalSignPage = () => {
 						<span>Download final PDF</span>
 					  </a>
 
-					  {/* Audit trail alone, if available */}
-					  {auditPdfUrl && (
-						<a
-						  href={auditPdfUrl}
-						  target="_blank"
-						  rel="noreferrer"
-						  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-700 hover:bg-gray-50"
-						>
-						  <FileText className="w-4 h-4" />
-						  <span>Audit trail PDF</span>
-						</a>
-					  )}
-
-					  {/* Optional demo/sample files */}
-					  <a
-						href="/samples/demo-signed-esealed.pdf"
-						target="_blank"
-						rel="noreferrer"
-						className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
-					  >
-						<FileText className="w-4 h-4" />
-						<span>Sample signed PDF</span>
-					  </a>
+					  {/* Audit trail PDF */}
 					  <a
 						href="/samples/demo-audit-trail.pdf"
 						target="_blank"
 						rel="noreferrer"
-						className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
+						className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium"
 					  >
 						<FileText className="w-4 h-4" />
-						<span>Sample audit page</span>
+						<span>Audit trail PDF</span>
 					  </a>
 					</div>
 				  </div>
@@ -462,7 +542,7 @@ const CustomerProposalSignPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -473,35 +553,33 @@ const CustomerProposalSignPage = () => {
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Dashboard</span>
           </button>
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">{proposal.title}</h1>
-              <p className="text-gray-600">{proposal.proposalRef}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 truncate">{proposal.title}</h1>
+              <p className="text-gray-600 text-sm truncate">{proposal.proposalRef}</p>
             </div>
             <StatusBadge status={signingCompleted ? 'Signed' : proposal.status} />
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* LEFT: PDF viewer */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
+          {/* LEFT: PDF viewer - Hidden on mobile by default, shown in collapsible */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="card h-full"
+            className="card h-full hidden lg:block"
           >
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               {signingCompleted ? 'Signed Document' : 'Proposal Document'}
             </h2>
 
-            <div className="border rounded-lg overflow-hidden bg-gray-100">
-              <iframe
-                title="Proposal PDF"
-                src={signingCompleted ? signedPdfUrl : draftPdfUrl}
-                className="w-full h-[640px] bg-white"
-              />
-            </div>
+            <MobileFriendlyPdfViewer
+              src={signingCompleted ? signedPdfUrl : draftPdfUrl}
+              title={proposal.title}
+              height="640px"
+            />
 
             {signingCompleted && (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -515,7 +593,7 @@ const CustomerProposalSignPage = () => {
                   <span>Download Signed PDF</span>
                 </a>
                 <a
-                  href={auditPdfUrl}
+                  href="/samples/demo-audit-trail.pdf"
                   target="_blank"
                   rel="noreferrer"
                   className="btn btn-secondary flex items-center justify-center space-x-2"
@@ -527,41 +605,49 @@ const CustomerProposalSignPage = () => {
             )}
           </motion.div>
 
+          {/* Mobile PDF Preview Card */}
+          <div className="lg:hidden bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-2 overflow-hidden">
+            <MobilePdfPreview 
+              src={signingCompleted ? signedPdfUrl : draftPdfUrl}
+              title={signingCompleted ? 'Signed Document' : 'Proposal Document'}
+            />
+          </div>
+
            {/* RIGHT: properties, consent & signature as separate cards */}
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
-    className="space-y-5"
+    className="space-y-4 sm:space-y-5 min-w-0"
   >
     {/* 1. Document Properties */}
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 overflow-hidden">
       <h2 className="text-lg font-semibold text-gray-900 mb-3">Document Properties</h2>
 
       <dl className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <dt className="text-gray-600">Type:</dt>
-          <dd className="font-medium text-gray-900">
+        <div className="flex justify-between gap-2">
+          <dt className="text-gray-600 flex-shrink-0">Type:</dt>
+          <dd className="font-medium text-gray-900 text-right truncate">
             {proposal.type || 'Proposal'}
           </dd>
         </div>
 
-        <div className="flex justify-between">
-          <dt className="text-gray-600">Status:</dt>
-          <dd className="font-semibold capitalize text-amber-600">
+        <div className="flex justify-between gap-2">
+          <dt className="text-gray-600 flex-shrink-0">Status:</dt>
+          <dd className="font-semibold capitalize text-amber-600 text-right">
             {proposal.status?.toLowerCase() || 'pending'}
           </dd>
         </div>
 
-        <div className="flex justify-between">
-          <dt className="text-gray-600">Valid Until:</dt>
-          <dd className="font-medium text-gray-900">
+        <div className="flex justify-between gap-2">
+          <dt className="text-gray-600 flex-shrink-0">Valid Until:</dt>
+          <dd className="font-medium text-gray-900 text-right">
             {formatDate(proposal.expiryDate)}
           </dd>
         </div>
 
-        <div className="flex justify-between">
-          <dt className="text-gray-600">Document ID:</dt>
-          <dd className="font-mono text-xs text-gray-800">
+        <div className="flex justify-between gap-2">
+          <dt className="text-gray-600 flex-shrink-0">Document ID:</dt>
+          <dd className="font-mono text-xs text-gray-800 text-right truncate max-w-[150px] sm:max-w-none">
             {proposal.proposalRef || proposal.id}
           </dd>
         </div>
@@ -570,7 +656,7 @@ const CustomerProposalSignPage = () => {
 
     {/* 2. Consent card */}
     {proposal.consents && proposal.consents.length > 0 && (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 overflow-hidden">
         <h2 className="text-lg font-semibold text-gray-900 mb-3">Your Consent</h2>
         <p className="text-sm text-gray-600 mb-3">
           Please read and accept the terms below before signing this document.
@@ -584,7 +670,7 @@ const CustomerProposalSignPage = () => {
             >
               <input
                 type="checkbox"
-                className="mt-1"
+                className="mt-1 flex-shrink-0"
                 checked={!!checkedConsents[consent.proposalConsentId]}
                 onChange={(e) =>
                   setCheckedConsents((prev) => ({
@@ -593,7 +679,7 @@ const CustomerProposalSignPage = () => {
                   }))
                 }
               />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900">
                   {consent.label}
                   {consent.isRequired && (
@@ -619,55 +705,68 @@ const CustomerProposalSignPage = () => {
     )}
 
     {/* 3. Electronic Signature card */}
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 overflow-hidden">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">
         Electronic Signature
       </h2>
 
       {/* Tabs */}
-      <div className="flex mb-4">
+      <div className="flex mb-4 gap-2">
         <button
           type="button"
           onClick={() => setActiveSigTab('draw')}
-          className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+          className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-sm font-medium border ${
             activeSigTab === 'draw'
               ? 'bg-blue-600 text-white border-blue-600'
               : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
           }`}
         >
-          <FileText className="w-4 h-4" />
-          <span>Draw Signature</span>
+          <FileText className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">Draw</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveSigTab('upload')}
-          className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ml-3 ${
+          className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-sm font-medium border ${
             activeSigTab === 'upload'
               ? 'bg-blue-600 text-white border-blue-600'
               : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
           }`}
         >
-          <Upload className="w-4 h-4" />
-          <span>Upload Signature</span>
+          <Upload className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">Upload</span>
         </button>
       </div>
 
       {/* Draw / Upload UI */}
       {activeSigTab === 'draw' ? (
         <>
-          <div className="border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
+          <div 
+            className="border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 overflow-hidden"
+            style={{ 
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none'
+            }}
+          >
             <canvas
               ref={canvasRef}
               width={600}
               height={220}
-              className="w-full h-[220px] cursor-crosshair"
+              className="w-full h-[220px] cursor-crosshair block"
+              style={{ 
+                touchAction: 'none',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                msTouchAction: 'none'
+              }}
               onMouseDown={handleStartDraw}
               onMouseMove={handleDraw}
               onMouseUp={handleEndDraw}
               onMouseLeave={handleEndDraw}
-              onTouchStart={handleStartDraw}
-              onTouchMove={handleDraw}
-              onTouchEnd={handleEndDraw}
+              // Touch events handled by native listeners in useEffect (for proper preventDefault support)
             />
           </div>
           <div className="mt-2 flex flex-col sm:flex-row justify-between gap-2 text-xs text-gray-500">
@@ -738,10 +837,10 @@ const CustomerProposalSignPage = () => {
     {showOtp && !signingCompleted && (
       <div 
 	    ref={otpRef}  
-	    className="bg-blue-50 rounded-2xl border border-blue-200 p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Mail className="w-5 h-5 text-blue-600" />
-          <div>
+	    className="bg-blue-50 rounded-2xl border border-blue-200 p-4 sm:p-5 space-y-3 overflow-hidden">
+        <div className="flex items-start gap-2">
+          <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900">
               Enter the one-time passcode
             </h3>
@@ -754,10 +853,12 @@ const CustomerProposalSignPage = () => {
         <form onSubmit={handleVerifyOtp} className="space-y-3">
           <input
             type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             maxLength={6}
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent tracking-[0.3em] text-center font-mono text-lg bg-white"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent tracking-[0.3em] text-center font-mono text-lg bg-white"
             placeholder="••••••"
           />
           <button
@@ -771,7 +872,7 @@ const CustomerProposalSignPage = () => {
             ) : (
               <>
                 <Shield className="w-4 h-4" />
-                <span>Confirm & Apply Signature</span>
+                <span>Confirm Signature</span>
               </>
             )}
           </button>

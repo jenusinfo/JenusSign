@@ -34,9 +34,21 @@ const PortalLayout = () => {
     Agent: 'bg-green-100 text-green-800',
   }
 
+  // 👉 helpers for navigation visibility
+  const isAdminOrEmployee = user.role === 'Admin' || user.role === 'Employee'
+  const isBroker = user.role === 'Broker'
+
   const navigation = [
     { name: 'Customers', href: '/portal/customers', icon: Users, show: true },
     { name: 'Proposals', href: '/portal/proposals', icon: FileText, show: true },
+
+    // Brokers: only Admin + Employee
+    { name: 'Brokers', href: '/portal/brokers', icon: Building2, show: isAdminOrEmployee },
+
+    // Agents: Admin + Employee + Broker
+    { name: 'Agents', href: '/portal/agents', icon: UserCircle, show: isAdminOrEmployee || isBroker },
+
+    // Users: Admin only (as before)
     { name: 'Users', href: '/portal/users', icon: Settings, show: isAdmin() },
   ]
 

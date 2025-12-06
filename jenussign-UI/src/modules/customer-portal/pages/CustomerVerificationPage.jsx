@@ -44,7 +44,7 @@ const CustomerVerificationPage = () => {
   const [step, setStep] = useState('identity') // 'identity' | 'contact' | 'otp'
   const [verificationMethod, setVerificationMethod] = useState(null) // null | 'eid' | 'idscan' | 'manual'
   const [eidDialogOpen, setEidDialogOpen] = useState(false)
-  
+
   // ID Scanning state
   const [idFrontImage, setIdFrontImage] = useState(null)
   const [idBackImage, setIdBackImage] = useState(null)
@@ -52,14 +52,14 @@ const CustomerVerificationPage = () => {
   const [extractedData, setExtractedData] = useState(null)
   const [scanningStep, setScanningStep] = useState('front') // 'front' | 'back' | 'selfie' | 'processing' | 'complete'
   const [isProcessing, setIsProcessing] = useState(false)
-  
+
   // Camera state
   const [cameraActive, setCameraActive] = useState(false)
   const [captureMode, setCaptureMode] = useState('upload') // 'upload' | 'camera'
   const [cameraError, setCameraError] = useState(null)
   const [isMobile, setIsMobile] = useState(false)
   const [cameraReady, setCameraReady] = useState(false)
-  
+
   // Separate refs for each file input to avoid conflicts
   const frontFileInputRef = useRef(null)
   const backFileInputRef = useRef(null)
@@ -143,12 +143,12 @@ const CustomerVerificationPage = () => {
   })
 
   // ===== Camera Functions =====
-  
+
   const startCamera = useCallback(async (forSelfie = false) => {
     try {
       setCameraError(null)
       setCameraReady(false)
-      
+
       // Stop any existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
@@ -165,16 +165,16 @@ const CustomerVerificationPage = () => {
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
-      
+
       // Small delay to ensure video element is mounted
       await new Promise(resolve => setTimeout(resolve, 100))
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         videoRef.current.setAttribute('playsinline', 'true')
         videoRef.current.setAttribute('autoplay', 'true')
         videoRef.current.muted = true
-        
+
         // Wait for video to be ready
         videoRef.current.onloadedmetadata = () => {
           videoRef.current.play()
@@ -198,13 +198,13 @@ const CustomerVerificationPage = () => {
           }
         }, 200)
       }
-      
+
       toast.success(`Camera activated (${forSelfie ? 'front' : 'rear'})`)
     } catch (err) {
       console.error('Camera error:', err)
       setCameraError(err.message || 'Could not access camera')
       setCaptureMode('upload')
-      
+
       if (err.name === 'NotAllowedError') {
         toast.error('Camera permission denied. Please allow camera access or use upload mode.')
       } else if (err.name === 'NotFoundError') {
@@ -238,7 +238,7 @@ const CustomerVerificationPage = () => {
     canvas.height = video.videoHeight || 720
 
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
-    
+
     return canvas.toDataURL('image/jpeg', 0.9)
   }, [])
 
@@ -287,7 +287,7 @@ const CustomerVerificationPage = () => {
       }
     }
     reader.readAsDataURL(file)
-    
+
     // Reset the input so the same file can be selected again if needed
     e.target.value = ''
   }
@@ -296,7 +296,7 @@ const CustomerVerificationPage = () => {
     if (type === 'front') setIdFrontImage(null)
     else if (type === 'back') setIdBackImage(null)
     else if (type === 'selfie') setSelfieImage(null)
-    
+
     // If in camera mode, restart the camera for retake
     if (captureMode === 'camera') {
       const forSelfie = type === 'selfie'
@@ -337,10 +337,10 @@ const CustomerVerificationPage = () => {
   const processIdImages = async () => {
     setIsProcessing(true)
     setScanningStep('processing')
-    
+
     // Simulated OCR processing
     await new Promise(resolve => setTimeout(resolve, 1500))
-    
+
     // Simulated extracted data - use session data when available
     const mockExtractedData = {
       fullName: session?.customerName || 'ANDREAS CONSTANTINOU',
@@ -350,16 +350,16 @@ const CustomerVerificationPage = () => {
       expiryDate: '2028-03-15',
       faceMatchScore: 98.5,
     }
-    
+
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     setExtractedData(mockExtractedData)
     setForm(prev => ({
       ...prev,
       dateOfBirth: mockExtractedData.dateOfBirth,
       idNumber: mockExtractedData.idNumber,
     }))
-    
+
     setScanningStep('complete')
     setIsProcessing(false)
     toast.success('Identity verified successfully!')
@@ -483,8 +483,36 @@ const CustomerVerificationPage = () => {
       <p className="text-sm text-gray-600 mb-4">
         Choose how you'd like to verify your identity:
       </p>
-      
-      {/* Cyprus eID Option */}
+
+      {/* 1. Manual ID Entry Option */}
+      <button
+        onClick={() => setVerificationMethod('manual')}
+        className="w-full p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all text-left group"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center flex-shrink-0">
+            <User className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-900">Manual ID Entry</span>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-gray-200 text-gray-700 rounded-full">MANUAL</span>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              {isIndividual
+                ? 'Provide your birth date and ID number manually'
+                : 'Enter company registration details'}
+            </p>
+            <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+              <IdCard className="w-3 h-3" />
+              <span>Quick and simple • No camera needed</span>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
+        </div>
+      </button>
+
+      {/* 2. Cyprus eID Verification Option */}
       <button
         onClick={openEidDialog}
         className="w-full p-4 rounded-xl border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 hover:border-blue-400 hover:shadow-md transition-all text-left group"
@@ -495,22 +523,22 @@ const CustomerVerificationPage = () => {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900">Cyprus eID</span>
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full">RECOMMENDED</span>
+              <span className="font-semibold text-gray-900">Cyprus eID Verification</span>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full">AUTOMATIC</span>
             </div>
             <p className="text-xs text-gray-600 mt-1">
               Instant verification using your government digital ID
             </p>
             <div className="flex items-center gap-1 mt-2 text-xs text-blue-600">
-              <Zap className="w-3 h-3" />
-              <span>Fastest • Most Secure</span>
+              <ShieldCheck className="w-3 h-3" />
+              <span>Secure • Full audit trail • eIDAS compliant</span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
         </div>
       </button>
 
-      {/* ID Card Scan Option */}
+      {/* 3. ID Scan & Selfie Option */}
       {isIndividual && (
         <button
           onClick={() => setVerificationMethod('idscan')}
@@ -522,46 +550,21 @@ const CustomerVerificationPage = () => {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-900">Scan ID Card</span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 rounded-full">SMART</span>
+                <span className="font-semibold text-gray-900">ID Scan & Selfie</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 rounded-full">SMART SCAN</span>
               </div>
               <p className="text-xs text-gray-600 mt-1">
-                Take photos of your ID card + selfie for verification
+                Take photos of your ID card + a selfie for automatic verification
               </p>
               <div className="flex items-center gap-1 mt-2 text-xs text-purple-600">
                 <Camera className="w-3 h-3" />
-                <span>Camera or Upload • Auto-extract data</span>
+                <span>Camera or upload • Data auto-extracted</span>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" />
           </div>
         </button>
       )}
-
-      {/* Manual Entry Option */}
-      <button
-        onClick={() => setVerificationMethod('manual')}
-        className="w-full p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all text-left group"
-      >
-        <div className="flex items-start gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center flex-shrink-0">
-            <User className="w-6 h-6 text-white" />
-          </div>
-          <div className="flex-1">
-            <span className="font-semibold text-gray-900">Enter Details Manually</span>
-            <p className="text-xs text-gray-600 mt-1">
-              {isIndividual 
-                ? 'Enter your date of birth and ID number' 
-                : 'Enter company registration details'}
-            </p>
-            <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
-              <IdCard className="w-3 h-3" />
-              <span>Traditional method</span>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
-        </div>
-      </button>
     </div>
   )
 
@@ -572,22 +575,20 @@ const CustomerVerificationPage = () => {
       <div className="flex items-center justify-center gap-2 mb-6">
         {['front', 'back', 'selfie'].map((s, idx) => (
           <React.Fragment key={s}>
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
-              scanningStep === s ? 'bg-purple-600 text-white' :
-              (scanningStep === 'processing' || scanningStep === 'complete' || 
-               (s === 'front' && idFrontImage) || 
-               (s === 'back' && idBackImage) || 
-               (s === 'selfie' && selfieImage)) 
-                ? 'bg-green-500 text-white' 
-                : 'bg-gray-200 text-gray-500'
-            }`}>
+            <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${scanningStep === s ? 'bg-purple-600 text-white' :
+                (scanningStep === 'processing' || scanningStep === 'complete' ||
+                  (s === 'front' && idFrontImage) ||
+                  (s === 'back' && idBackImage) ||
+                  (s === 'selfie' && selfieImage))
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-200 text-gray-500'
+              }`}>
               {(s === 'front' && idFrontImage) || (s === 'back' && idBackImage) || (s === 'selfie' && selfieImage) || scanningStep === 'processing' || scanningStep === 'complete'
                 ? <Check className="w-4 h-4" />
                 : idx + 1}
             </div>
-            {idx < 2 && <div className={`w-12 h-1 rounded ${
-              (s === 'front' && idFrontImage) || (s === 'back' && idBackImage) ? 'bg-green-500' : 'bg-gray-200'
-            }`} />}
+            {idx < 2 && <div className={`w-12 h-1 rounded ${(s === 'front' && idFrontImage) || (s === 'back' && idBackImage) ? 'bg-green-500' : 'bg-gray-200'
+              }`} />}
           </React.Fragment>
         ))}
       </div>
@@ -612,22 +613,20 @@ const CustomerVerificationPage = () => {
           <div className="flex justify-center gap-2 mb-4">
             <button
               onClick={() => toggleCaptureMode('upload')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                captureMode === 'upload' 
-                  ? 'bg-purple-600 text-white' 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
+                  ? 'bg-purple-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
               Upload
             </button>
             <button
               onClick={() => toggleCaptureMode('camera', false)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                captureMode === 'camera' 
-                  ? 'bg-purple-600 text-white' 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
+                  ? 'bg-purple-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
               Camera
@@ -746,22 +745,20 @@ const CustomerVerificationPage = () => {
           <div className="flex justify-center gap-2 mb-4">
             <button
               onClick={() => toggleCaptureMode('upload')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                captureMode === 'upload' 
-                  ? 'bg-purple-600 text-white' 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
+                  ? 'bg-purple-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
               Upload
             </button>
             <button
               onClick={() => toggleCaptureMode('camera', false)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                captureMode === 'camera' 
-                  ? 'bg-purple-600 text-white' 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
+                  ? 'bg-purple-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
               Camera
@@ -878,22 +875,20 @@ const CustomerVerificationPage = () => {
           <div className="flex justify-center gap-2 mb-4">
             <button
               onClick={() => toggleCaptureMode('upload')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                captureMode === 'upload' 
-                  ? 'bg-purple-600 text-white' 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
+                  ? 'bg-purple-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
               Upload
             </button>
             <button
               onClick={() => toggleCaptureMode('camera', true)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                captureMode === 'camera' 
-                  ? 'bg-purple-600 text-white' 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
+                  ? 'bg-purple-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
               Camera
@@ -1011,7 +1006,7 @@ const CustomerVerificationPage = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
             Identity Verified Successfully!
           </h3>
-          
+
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 mt-4 text-left">
             <h4 className="text-sm font-medium text-green-800 mb-3">Extracted Information:</h4>
             <div className="space-y-2 text-sm">
@@ -1231,13 +1226,12 @@ const CustomerVerificationPage = () => {
           ].map((s, idx) => (
             <React.Fragment key={s.key}>
               <div
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                  step === s.key
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${step === s.key
                     ? 'bg-primary-600 text-white'
                     : idx < ['identity', 'contact', 'otp'].indexOf(step)
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-500'
-                }`}
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}
               >
                 {idx < ['identity', 'contact', 'otp'].indexOf(step) ? (
                   <CheckCircle2 className="w-3.5 h-3.5" />

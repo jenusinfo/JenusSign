@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
 import {
   ArrowLeft,
   Shield,
@@ -35,6 +37,82 @@ import { signingSessionsApi } from '../../../api/mockApi'
 import useAuthStore from '../../../stores/authStore'
 import Loading from '../../../shared/components/Loading'
 import { formatDate } from '../../../shared/utils/formatters'
+
+// Custom styles for react-datepicker
+const datePickerStyles = `
+  .react-datepicker {
+    font-family: inherit;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+  .react-datepicker__header {
+    background: linear-gradient(to right, #4f46e5, #6366f1);
+    border-bottom: none;
+    border-radius: 12px 12px 0 0;
+    padding-top: 12px;
+  }
+  .react-datepicker__current-month,
+  .react-datepicker__day-name {
+    color: white;
+  }
+  .react-datepicker__month-dropdown-container,
+  .react-datepicker__year-dropdown-container {
+    margin: 0 4px;
+  }
+  .react-datepicker__month-select,
+  .react-datepicker__year-select {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.2);
+    color: white;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .react-datepicker__month-select:focus,
+  .react-datepicker__year-select:focus {
+    outline: none;
+    border-color: white;
+  }
+  .react-datepicker__month-select option,
+  .react-datepicker__year-select option {
+    color: #1f2937;
+    background: white;
+  }
+  .react-datepicker__day--selected,
+  .react-datepicker__day--keyboard-selected {
+    background-color: #4f46e5 !important;
+    border-radius: 8px;
+  }
+  .react-datepicker__day:hover {
+    background-color: #e0e7ff;
+    border-radius: 8px;
+  }
+  .react-datepicker__navigation {
+    top: 12px;
+  }
+  .react-datepicker__navigation-icon::before {
+    border-color: white;
+  }
+  .react-datepicker-popper {
+    z-index: 50;
+  }
+  @media (max-width: 640px) {
+    .react-datepicker {
+      width: 100%;
+    }
+    .react-datepicker__month-container {
+      width: 100%;
+    }
+    .react-datepicker__month-select,
+    .react-datepicker__year-select {
+      font-size: 16px;
+      padding: 6px 10px;
+    }
+  }
+`
 
 const CustomerVerificationPage = () => {
   const { token } = useParams()
@@ -86,6 +164,23 @@ const CustomerVerificationPage = () => {
       setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
     }
     checkMobile()
+  }, [])
+
+  // Inject custom datepicker styles
+  useEffect(() => {
+    const styleId = 'datepicker-custom-styles'
+    if (!document.getElementById(styleId)) {
+      const styleSheet = document.createElement('style')
+      styleSheet.id = styleId
+      styleSheet.textContent = datePickerStyles
+      document.head.appendChild(styleSheet)
+    }
+    return () => {
+      const existingStyle = document.getElementById(styleId)
+      if (existingStyle) {
+        existingStyle.remove()
+      }
+    }
   }, [])
 
   // 1. Load signing session (from token)
@@ -576,12 +671,12 @@ const CustomerVerificationPage = () => {
         {['front', 'back', 'selfie'].map((s, idx) => (
           <React.Fragment key={s}>
             <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${scanningStep === s ? 'bg-purple-600 text-white' :
-              (scanningStep === 'processing' || scanningStep === 'complete' ||
-                (s === 'front' && idFrontImage) ||
-                (s === 'back' && idBackImage) ||
-                (s === 'selfie' && selfieImage))
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-200 text-gray-500'
+                (scanningStep === 'processing' || scanningStep === 'complete' ||
+                  (s === 'front' && idFrontImage) ||
+                  (s === 'back' && idBackImage) ||
+                  (s === 'selfie' && selfieImage))
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-200 text-gray-500'
               }`}>
               {(s === 'front' && idFrontImage) || (s === 'back' && idBackImage) || (s === 'selfie' && selfieImage) || scanningStep === 'processing' || scanningStep === 'complete'
                 ? <Check className="w-4 h-4" />
@@ -614,8 +709,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('upload')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
@@ -624,8 +719,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('camera', false)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
@@ -746,8 +841,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('upload')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
@@ -756,8 +851,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('camera', false)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
@@ -876,8 +971,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('upload')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
@@ -886,8 +981,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('camera', true)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
@@ -1080,11 +1175,23 @@ const CustomerVerificationPage = () => {
           <Calendar className="w-4 h-4 text-gray-400" />
           Date of birth
         </label>
-        <input
-          type="date"
-          value={form.dateOfBirth}
-          onChange={handleChange('dateOfBirth')}
+        <DatePicker
+          selected={form.dateOfBirth ? new Date(form.dateOfBirth) : null}
+          onChange={(date) => setForm(prev => ({
+            ...prev,
+            dateOfBirth: date ? date.toISOString().split('T')[0] : ''
+          }))}
+          dateFormat="dd/MM/yyyy"
+          showYearDropdown
+          showMonthDropdown
+          dropdownMode="select"
+          yearDropdownItemNumber={100}
+          scrollableYearDropdown
+          maxDate={new Date()}
+          minDate={new Date('1900-01-01')}
+          placeholderText="Select your date of birth"
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          wrapperClassName="w-full"
           required
         />
       </div>
@@ -1135,11 +1242,23 @@ const CustomerVerificationPage = () => {
           <Calendar className="w-4 h-4 text-gray-400" />
           Date of Registration
         </label>
-        <input
-          type="date"
-          value={form.dateOfRegistration}
-          onChange={handleChange('dateOfRegistration')}
+        <DatePicker
+          selected={form.dateOfRegistration ? new Date(form.dateOfRegistration) : null}
+          onChange={(date) => setForm(prev => ({
+            ...prev,
+            dateOfRegistration: date ? date.toISOString().split('T')[0] : ''
+          }))}
+          dateFormat="dd/MM/yyyy"
+          showYearDropdown
+          showMonthDropdown
+          dropdownMode="select"
+          yearDropdownItemNumber={100}
+          scrollableYearDropdown
+          maxDate={new Date()}
+          minDate={new Date('1900-01-01')}
+          placeholderText="Select registration date"
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          wrapperClassName="w-full"
           required
         />
       </div>
@@ -1227,10 +1346,10 @@ const CustomerVerificationPage = () => {
             <React.Fragment key={s.key}>
               <div
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${step === s.key
-                  ? 'bg-primary-600 text-white'
-                  : idx < ['identity', 'contact', 'otp'].indexOf(step)
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-500'
+                    ? 'bg-primary-600 text-white'
+                    : idx < ['identity', 'contact', 'otp'].indexOf(step)
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-500'
                   }`}
               >
                 {idx < ['identity', 'contact', 'otp'].indexOf(step) ? (

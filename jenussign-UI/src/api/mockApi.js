@@ -88,26 +88,31 @@ const DEMO_CUSTOMERS = [
 ]
 
 // Demo Proposals Database (Enhanced for Customer Portal)
+// PDF URLs added for each proposal
 const DEMO_PROPOSALS = [
   {
     id: 'prop-001',
     customerId: 'cust-001',
     customerEmail: 'john.doe@example.com',
-    customerName: 'John Doe',
+    customerName: 'Yiannis Kleanthous',
     insuranceCoreProposalId: 'PROP-12345',
-    proposalRef: 'PR-2025-0001',      // <-- CHANGED from PR-2024-0001
-    referenceNumber: 'PR-2025-0001',  // <-- CHANGED
+    proposalRef: 'PR-2025-0001',
+    referenceNumber: 'PR-2025-0001',
     businessKey: 'PROP-PROP-12345',
-    title: 'Home Insurance Proposal PR-2025-0001',  // <-- Added ref to title
+    title: 'Home Insurance Proposal PR-2025-0001',
     productType: 'Home Insurance',
     status: 'PENDING',
     premium: 1250.00,
     createdByUserId: 'user-agt-001',
     createdAt: '2024-11-10T10:00:00Z',
     lastActivityAt: '2024-11-15T08:30:00Z',
-    expiryDate: '2024-12-10T23:59:59Z',
+    expiryDate: '2025-12-31T23:59:59Z',
     assignedAgentId: 'user-agt-001',
     assignedBrokerId: 'user-brk-001',
+    // PDF URLs for Home Insurance
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
     consents: [
       {
         proposalConsentId: 'pc-001',
@@ -131,21 +136,25 @@ const DEMO_PROPOSALS = [
     id: 'prop-002',
     customerId: 'cust-001',
     customerEmail: 'john.doe@example.com',
-    customerName: 'John Doe',
+    customerName: 'Charis Constantinou',
     insuranceCoreProposalId: 'PROP-12346',
-    proposalRef: 'PR-2025-0002',      // <-- CHANGED from PR-2024-0002
-    referenceNumber: 'PR-2025-0002',  // <-- CHANGED
+    proposalRef: 'PR-2025-0002',
+    referenceNumber: 'PR-2025-0002',
     businessKey: 'PROP-PROP-12346',
-    title: 'Motor Insurance Proposal PR-2025-0002',  // <-- Added ref to title
+    title: 'Motor Insurance Proposal PR-2025-0002',
     productType: 'Motor Insurance',
-    status: 'IN_PROGRESS',
+    status: 'PENDING',
     premium: 850.00,
     createdByUserId: 'user-agt-001',
     createdAt: '2024-11-12T14:00:00Z',
     lastActivityAt: '2024-11-18T10:15:00Z',
-    expiryDate: '2024-12-12T23:59:59Z',
+    expiryDate: '2025-12-31T23:59:59Z',
     assignedAgentId: 'user-agt-001',
     assignedBrokerId: 'user-brk-001',
+    // PDF URLs for Motor Insurance
+    documentUrl: '/samples/motor-insurance-proposal-PR-2025-0002.pdf',
+    signedDocumentUrl: '/samples/demo-motor-signed-esealed.pdf',
+    auditTrailUrl: '/samples/motor-insurance-audit-trail-PR-2025-0002.pdf',
     consents: [
       {
         proposalConsentId: 'pc-003',
@@ -169,12 +178,12 @@ const DEMO_PROPOSALS = [
     id: 'prop-003',
     customerId: 'cust-001',
     customerEmail: 'john.doe@example.com',
-    customerName: 'John Doe',
+    customerName: 'Nikos Papadopoulos',
     insuranceCoreProposalId: 'PROP-12347',
-    proposalRef: 'PR-2024-0003',
-    referenceNumber: 'PR-2024-0003',
+    proposalRef: 'PR-2025-0003',
+    referenceNumber: 'PR-2025-0003',
     businessKey: 'PROP-PROP-12347',
-    title: 'Travel Insurance Policy',
+    title: 'Travel Insurance Policy PR-2025-0003',
     productType: 'Travel Insurance',
     status: 'COMPLETED',
     premium: 320.00,
@@ -182,9 +191,13 @@ const DEMO_PROPOSALS = [
     createdAt: '2024-10-25T09:00:00Z',
     lastActivityAt: '2024-10-28T16:45:00Z',
     signedAt: '2024-10-28T16:45:00Z',
-    expiryDate: '2024-11-25T23:59:59Z',
+    expiryDate: '2025-11-25T23:59:59Z',
     assignedAgentId: 'user-agt-001',
     assignedBrokerId: 'user-brk-001',
+    // PDF URLs for Travel Insurance (reusing home for demo)
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
     consents: []
   },
   {
@@ -193,10 +206,10 @@ const DEMO_PROPOSALS = [
     customerEmail: 'john.doe@example.com',
     customerName: 'John Doe',
     insuranceCoreProposalId: 'PROP-12348',
-    proposalRef: 'PR-2024-0004',
-    referenceNumber: 'PR-2024-0004',
+    proposalRef: 'PR-2025-0004',
+    referenceNumber: 'PR-2025-0004',
     businessKey: 'PROP-PROP-12348',
-    title: 'Life Insurance Proposal',
+    title: 'Life Insurance Proposal PR-2025-0004',
     productType: 'Life Insurance',
     status: 'SIGNED',
     premium: 2400.00,
@@ -204,9 +217,13 @@ const DEMO_PROPOSALS = [
     createdAt: '2024-09-15T11:00:00Z',
     lastActivityAt: '2024-09-20T14:30:00Z',
     signedAt: '2024-09-20T14:30:00Z',
-    expiryDate: '2024-10-15T23:59:59Z',
+    expiryDate: '2025-10-15T23:59:59Z',
     assignedAgentId: 'user-agt-001',
     assignedBrokerId: 'user-brk-001',
+    // PDF URLs for Life Insurance (reusing home for demo)
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
     consents: []
   },
   {
@@ -215,20 +232,41 @@ const DEMO_PROPOSALS = [
     customerEmail: 'info@techsolutions.cy',
     customerName: 'Tech Solutions Ltd',
     insuranceCoreProposalId: 'PROP-12349',
-    proposalRef: 'PR-2024-0005',
-    referenceNumber: 'PR-2024-0005',
+    proposalRef: 'PR-2025-0005',
+    referenceNumber: 'PR-2025-0005',
     businessKey: 'PROP-PROP-12349',
-    title: 'Business Liability Insurance',
+    title: 'Business Liability Insurance PR-2025-0005',
     productType: 'Business Insurance',
     status: 'PENDING',
     premium: 4500.00,
     createdByUserId: 'user-agt-001',
     createdAt: '2024-11-18T09:00:00Z',
     lastActivityAt: '2024-11-18T09:00:00Z',
-    expiryDate: '2024-12-18T23:59:59Z',
+    expiryDate: '2025-12-18T23:59:59Z',
     assignedAgentId: 'user-agt-001',
     assignedBrokerId: 'user-brk-001',
-    consents: []
+    // PDF URLs for Business Insurance (reusing motor for demo)
+    documentUrl: '/samples/motor-insurance-proposal-PR-2025-0002.pdf',
+    signedDocumentUrl: '/samples/demo-motor-signed-esealed.pdf',
+    auditTrailUrl: '/samples/motor-insurance-audit-trail-PR-2025-0002.pdf',
+    consents: [
+      {
+        proposalConsentId: 'pc-005',
+        consentDefinitionId: 'cd-001',
+        label: 'I accept the Terms & Conditions',
+        controlType: 'Checkbox',
+        isRequired: true,
+        value: null
+      },
+      {
+        proposalConsentId: 'pc-006',
+        consentDefinitionId: 'cd-002',
+        label: 'I accept the Privacy Policy',
+        controlType: 'Checkbox',
+        isRequired: true,
+        value: null
+      }
+    ]
   }
 ]
 
@@ -361,21 +399,26 @@ export const customerProposalsApi = {
     return proposal
   }
 }
+
 // ============================================
 // DEMO SIGNING SESSIONS - Multiple tokens for prospect demos
 // ============================================
 const DEMO_SIGNING_SESSIONS = {
-  // Token 1: Yiannis Kleanthous (Default demo)
+  // Token 1: Yiannis Kleanthous - Home Insurance
   'demo1': {
     token: 'demo1',
     proposalId: 'prop-001',
-    proposalTitle: 'Home Insurance Proposal',
+    proposalTitle: 'Home Insurance Proposal PR-2025-0001',
     customerType: 'INDIVIDUAL',
     customerName: 'Yiannis Kleanthous',
     prefilledEmail: 'yiannis.kleanthous@hydrainsurance.com.cy',
     prefilledMobile: '+357 99 123456',
     expectedDateOfBirth: '1985-03-12',
     expectedIdNumber: 'X1234567',
+    // PDF URLs for this session
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
     eidData: {
       name: 'Yiannis Kleanthous',
       idNumber: 'X1234567',
@@ -383,17 +426,21 @@ const DEMO_SIGNING_SESSIONS = {
       email: 'yiannis.kleanthous@hydrainsurance.com.cy'
     }
   },
-  // Token 2: Charis Constantinou - Motor Insurance (CHANGED)
+  // Token 2: Charis Constantinou - Motor Insurance
   'demo2': {
     token: 'demo2',
-    proposalId: 'prop-002',  // <-- CHANGED from prop-001
-    proposalTitle: 'Motor Insurance Proposal PR-2025-0002',  // <-- CHANGED
+    proposalId: 'prop-002',
+    proposalTitle: 'Motor Insurance Proposal PR-2025-0002',
     customerType: 'INDIVIDUAL',
     customerName: 'Charis Constantinou',
     prefilledEmail: 'charis.constantinou@hydrainsurance.com.cy',
     prefilledMobile: '+357 99 654321',
     expectedDateOfBirth: '1990-07-22',
     expectedIdNumber: 'M7654321',
+    // PDF URLs for this session
+    documentUrl: '/samples/motor-insurance-proposal-PR-2025-0002.pdf',
+    signedDocumentUrl: '/samples/demo-motor-signed-esealed.pdf',
+    auditTrailUrl: '/samples/motor-insurance-audit-trail-PR-2025-0002.pdf',
     eidData: {
       name: 'Charis Constantinou',
       idNumber: 'M7654321',
@@ -401,10 +448,10 @@ const DEMO_SIGNING_SESSIONS = {
       email: 'charis.constantinou@hydrainsurance.com.cy'
     }
   },
-  // Token 3: Nikos Papadopoulos (optional third demo)
+  // Token 3: Nikos Papadopoulos - Travel Insurance
   'demo3': {
     token: 'demo3',
-    proposalId: 'prop-003',  // Travel Insurance
+    proposalId: 'prop-003',
     proposalTitle: 'Travel Insurance Policy PR-2025-0003',
     customerType: 'INDIVIDUAL',
     customerName: 'Nikos Papadopoulos',
@@ -412,6 +459,10 @@ const DEMO_SIGNING_SESSIONS = {
     prefilledMobile: '+357 99 789012',
     expectedDateOfBirth: '1978-11-05',
     expectedIdNumber: 'N9876543',
+    // PDF URLs (reusing home for demo)
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
     eidData: {
       name: 'Nikos Papadopoulos',
       idNumber: 'N9876543',
@@ -423,13 +474,17 @@ const DEMO_SIGNING_SESSIONS = {
   'business1': {
     token: 'business1',
     proposalId: 'prop-005',
-    proposalTitle: 'Business Liability Insurance',
+    proposalTitle: 'Business Liability Insurance PR-2025-0005',
     customerType: 'BUSINESS',
     customerName: 'Tech Solutions Ltd',
     companyName: 'Tech Solutions Ltd',
     prefilledEmail: 'info@techsolutions.cy',
     prefilledMobile: '+357 22 123456',
     expectedRegistrationNumber: 'HE123456',
+    // PDF URLs (reusing motor for demo)
+    documentUrl: '/samples/motor-insurance-proposal-PR-2025-0002.pdf',
+    signedDocumentUrl: '/samples/demo-motor-signed-esealed.pdf',
+    auditTrailUrl: '/samples/motor-insurance-audit-trail-PR-2025-0002.pdf',
     eidData: {
       name: 'Tech Solutions Ltd',
       registrationNumber: 'HE123456',
@@ -438,19 +493,19 @@ const DEMO_SIGNING_SESSIONS = {
   }
 }
 
-// Default session for unknown tokens (falls back to Andreas)
+// Default session for unknown tokens (falls back to demo1)
 const DEFAULT_SIGNING_SESSION = DEMO_SIGNING_SESSIONS['demo1']
 
 export const signingSessionsApi = {
   /**
    * Get session by token
    * Supported demo tokens:
-   * - demo1: Andreas Constantinou (default)
-   * - demo2: Maria Georgiou
-   * - demo3: Nikos Papadopoulos
-   * - business1: Tech Solutions Ltd
+   * - demo1: Yiannis Kleanthous - Home Insurance
+   * - demo2: Charis Constantinou - Motor Insurance
+   * - demo3: Nikos Papadopoulos - Travel Insurance
+   * - business1: Tech Solutions Ltd - Business Insurance
    * 
-   * Any other token will return the default (Andreas) session
+   * Any other token will return the default (demo1) session
    */
   async getSessionByToken(token) {
     await delay(300)
@@ -647,6 +702,10 @@ export const proposalsApi = {
       status: (data && data.status) ? data.status : 'Draft',
       createdAt: now,
       lastActivityAt: now,
+      // Default PDF URLs
+      documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+      signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+      auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
       ...data,
     }
 
@@ -693,10 +752,6 @@ export const proposalsApi = {
     proposal.signedAt = new Date().toISOString()
     proposal.signatureType = signatureType
     proposal.signedByChannel = signedByChannel
-
-    // Dummy URLs
-    proposal.signedDocumentUrl = '/demo-signed-proposal.pdf'
-    proposal.auditTrailUrl = '/demo-audit-trail.pdf'
 
     return { ...proposal }
   }
@@ -913,13 +968,13 @@ export const consentDefinitionsApi = {
   }
 }
 
-console.log('🚀 Enhanced Mock API loaded')
+console.log('🚀 Enhanced Mock API loaded with PDF URLs')
 console.log('📧 Demo Portal Login: admin@insurance.com / admin123')
 console.log('🔑 Demo OTP: 123456')
 console.log('👤 Demo Customer: john.doe@example.com (or any email)')
 console.log('📋 Demo Proposals: 5 proposals available')
 console.log('🔗 Demo Signing Tokens:')
-console.log('   - demo1: Andreas Constantinou')
-console.log('   - demo2: Maria Georgiou')
-console.log('   - demo3: Nikos Papadopoulos')
-console.log('   - business1: Tech Solutions Ltd')
+console.log('   - demo1: Yiannis Kleanthous (Home Insurance)')
+console.log('   - demo2: Charis Constantinou (Motor Insurance)')
+console.log('   - demo3: Nikos Papadopoulos (Travel Insurance)')
+console.log('   - business1: Tech Solutions Ltd (Business Insurance)')

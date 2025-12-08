@@ -95,10 +95,10 @@ const DEMO_PROPOSALS = [
     customerEmail: 'john.doe@example.com',
     customerName: 'John Doe',
     insuranceCoreProposalId: 'PROP-12345',
-    proposalRef: 'PR-2024-0001',
-    referenceNumber: 'PR-2024-0001',
+    proposalRef: 'PR-2025-0001',      // <-- CHANGED from PR-2024-0001
+    referenceNumber: 'PR-2025-0001',  // <-- CHANGED
     businessKey: 'PROP-PROP-12345',
-    title: 'Home Insurance Proposal',
+    title: 'Home Insurance Proposal PR-2025-0001',  // <-- Added ref to title
     productType: 'Home Insurance',
     status: 'PENDING',
     premium: 1250.00,
@@ -133,10 +133,10 @@ const DEMO_PROPOSALS = [
     customerEmail: 'john.doe@example.com',
     customerName: 'John Doe',
     insuranceCoreProposalId: 'PROP-12346',
-    proposalRef: 'PR-2024-0002',
-    referenceNumber: 'PR-2024-0002',
+    proposalRef: 'PR-2025-0002',      // <-- CHANGED from PR-2024-0002
+    referenceNumber: 'PR-2025-0002',  // <-- CHANGED
     businessKey: 'PROP-PROP-12346',
-    title: 'Motor Insurance Proposal',
+    title: 'Motor Insurance Proposal PR-2025-0002',  // <-- Added ref to title
     productType: 'Motor Insurance',
     status: 'IN_PROGRESS',
     premium: 850.00,
@@ -146,7 +146,24 @@ const DEMO_PROPOSALS = [
     expiryDate: '2024-12-12T23:59:59Z',
     assignedAgentId: 'user-agt-001',
     assignedBrokerId: 'user-brk-001',
-    consents: []
+    consents: [
+      {
+        proposalConsentId: 'pc-003',
+        consentDefinitionId: 'cd-001',
+        label: 'I accept the Terms & Conditions',
+        controlType: 'Checkbox',
+        isRequired: true,
+        value: null
+      },
+      {
+        proposalConsentId: 'pc-004',
+        consentDefinitionId: 'cd-002',
+        label: 'I accept the Privacy Policy',
+        controlType: 'Checkbox',
+        isRequired: true,
+        value: null
+      }
+    ]
   },
   {
     id: 'prop-003',
@@ -222,9 +239,9 @@ const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms))
 export const authApi = {
   async login({ email, password }) {
     await delay()
-    
+
     const user = DEMO_USERS.find(u => u.email === email && u.password === password)
-    
+
     if (!user) {
       throw new Error('Invalid email or password')
     }
@@ -236,13 +253,13 @@ export const authApi = {
 
   async verifyOtp({ email, otp }) {
     await delay()
-    
+
     if (!otp || otp.length !== 6) {
       throw new Error('Invalid OTP')
     }
 
     const user = DEMO_USERS.find(u => u.email === email)
-    
+
     if (!user) {
       throw new Error('User not found')
     }
@@ -265,7 +282,7 @@ export const authApi = {
 export const customerAuthApi = {
   async requestOtp({ email }) {
     await delay()
-    
+
     if (!email || !email.includes('@')) {
       throw new Error('Invalid email address')
     }
@@ -276,7 +293,7 @@ export const customerAuthApi = {
 
   async verifyOtp({ email, otp }) {
     await delay()
-    
+
     // Accept 123456 for demo
     if (otp !== '123456') {
       throw new Error('Invalid OTP')
@@ -284,7 +301,7 @@ export const customerAuthApi = {
 
     // Find or create customer
     let customer = DEMO_CUSTOMERS.find(c => c.email === email)
-    
+
     if (!customer) {
       // Create demo customer for any email
       customer = {
@@ -319,7 +336,7 @@ export const customerProposalsApi = {
     }
 
     // Find proposals by customer email
-    let proposals = DEMO_PROPOSALS.filter(p => 
+    let proposals = DEMO_PROPOSALS.filter(p =>
       p.customerEmail?.toLowerCase() === email.toLowerCase()
     )
 
@@ -366,11 +383,11 @@ const DEMO_SIGNING_SESSIONS = {
       email: 'yiannis.kleanthous@hydrainsurance.com.cy'
     }
   },
-  // Token 2: Charis Constantinou (Second demo user)
+  // Token 2: Charis Constantinou - Motor Insurance (CHANGED)
   'demo2': {
     token: 'demo2',
-    proposalId: 'prop-001',
-    proposalTitle: 'Home Insurance Proposal',
+    proposalId: 'prop-002',  // <-- CHANGED from prop-001
+    proposalTitle: 'Motor Insurance Proposal PR-2025-0002',  // <-- CHANGED
     customerType: 'INDIVIDUAL',
     customerName: 'Charis Constantinou',
     prefilledEmail: 'charis.constantinou@hydrainsurance.com.cy',
@@ -384,11 +401,11 @@ const DEMO_SIGNING_SESSIONS = {
       email: 'charis.constantinou@hydrainsurance.com.cy'
     }
   },
-  // Token 3: Nikos Papadopoulos (Third demo user)
+  // Token 3: Nikos Papadopoulos (optional third demo)
   'demo3': {
     token: 'demo3',
-    proposalId: 'prop-002',
-    proposalTitle: 'Motor Insurance Proposal',
+    proposalId: 'prop-003',  // Travel Insurance
+    proposalTitle: 'Travel Insurance Policy PR-2025-0003',
     customerType: 'INDIVIDUAL',
     customerName: 'Nikos Papadopoulos',
     prefilledEmail: 'nikos.p@example.com',
@@ -492,16 +509,16 @@ export const signingSessionsApi = {
 export const customersApi = {
   async getCustomers({ page = 1, pageSize = 10, status, search } = {}) {
     await delay()
-    
+
     let items = [...DEMO_CUSTOMERS]
-    
+
     if (status) {
       items = items.filter(c => c.status === status)
     }
-    
+
     if (search) {
       const searchLower = search.toLowerCase()
-      items = items.filter(c => 
+      items = items.filter(c =>
         c.fullName?.toLowerCase().includes(searchLower) ||
         c.legalName?.toLowerCase().includes(searchLower) ||
         c.email?.toLowerCase().includes(searchLower) ||
@@ -517,22 +534,22 @@ export const customersApi = {
     }
   },
   async getCustomer(id) {
-      await delay()
+    await delay()
 
-      const customer = DEMO_CUSTOMERS.find((c) => c.id === id)
+    const customer = DEMO_CUSTOMERS.find((c) => c.id === id)
 
-      if (!customer) {
-        throw new Error('Customer not found')
-      }
+    if (!customer) {
+      throw new Error('Customer not found')
+    }
 
-      return customer
-    },
+    return customer
+  },
 
   async getCustomerById(id) {
     await delay()
-    
+
     const customer = DEMO_CUSTOMERS.find(c => c.id === id)
-    
+
     if (!customer) {
       throw new Error('Customer not found')
     }
@@ -542,24 +559,24 @@ export const customersApi = {
 
   async createCustomer(data) {
     await delay()
-    
+
     const newCustomer = {
       id: `cust-${Date.now()}`,
       ...data,
       status: 'Active',
       createdAt: new Date().toISOString()
     }
-    
+
     DEMO_CUSTOMERS.push(newCustomer)
-    
+
     return newCustomer
   },
 
   async updateCustomer(id, data) {
     await delay()
-    
+
     const index = DEMO_CUSTOMERS.findIndex(c => c.id === id)
-    
+
     if (index === -1) {
       throw new Error('Customer not found')
     }
@@ -568,7 +585,7 @@ export const customersApi = {
       ...DEMO_CUSTOMERS[index],
       ...data
     }
-    
+
     return DEMO_CUSTOMERS[index]
   }
 }
@@ -577,13 +594,13 @@ export const customersApi = {
 export const proposalsApi = {
   async getProposals({ customerId, status, fromDate, toDate, page = 1, pageSize = 10 } = {}) {
     await delay()
-    
+
     let items = [...DEMO_PROPOSALS]
-    
+
     if (customerId) {
       items = items.filter(p => p.customerId === customerId)
     }
-    
+
     if (status) {
       items = items.filter(p => p.status === status)
     }
@@ -595,24 +612,24 @@ export const proposalsApi = {
       pageSize
     }
   },
-  
+
   async getProposal(id) {
-      await delay()
+    await delay()
 
-      const proposal = DEMO_PROPOSALS.find((p) => p.id === id)
+    const proposal = DEMO_PROPOSALS.find((p) => p.id === id)
 
-      if (!proposal) {
-        throw new Error('Proposal not found')
-      }
+    if (!proposal) {
+      throw new Error('Proposal not found')
+    }
 
-      return proposal
-    },
+    return proposal
+  },
 
   async getProposalById(id) {
     await delay()
-    
+
     const proposal = DEMO_PROPOSALS.find(p => p.id === id)
-    
+
     if (!proposal) {
       throw new Error('Proposal not found')
     }
@@ -640,9 +657,9 @@ export const proposalsApi = {
 
   async uploadDocument(proposalId, file) {
     await delay()
-    
+
     console.log(`[DEMO] Document uploaded for proposal ${proposalId}:`, file.name)
-    
+
     return {
       proposalId,
       documentId: `doc-${Date.now()}`,
@@ -653,15 +670,15 @@ export const proposalsApi = {
 
   async sendInvitation(proposalId, data) {
     await delay()
-    
+
     console.log(`[DEMO] Invitation sent for proposal ${proposalId}`)
-    
+
     return {
       success: true,
       invitationSentAt: new Date().toISOString()
     }
   },
-  
+
   async completeSigning(proposalId, { signatureType, signedByChannel }) {
     await delay()
 
@@ -758,7 +775,7 @@ export const usersApi = {
   },
 
 
-    async getUser(id) {
+  async getUser(id) {
     await delay();
     const u = DEMO_USERS.find((x) => x.id === id);
     if (!u) {
@@ -842,7 +859,7 @@ export const usersApi = {
 export const settingsApi = {
   async getSettings() {
     await delay()
-    
+
     return {
       tsa: {
         endpoint: 'https://freetsa.org/tsr',
@@ -866,7 +883,7 @@ export const settingsApi = {
 export const consentDefinitionsApi = {
   async getConsentDefinitions() {
     await delay()
-    
+
     return [
       {
         id: 'cd-001',

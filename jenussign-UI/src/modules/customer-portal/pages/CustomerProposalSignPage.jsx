@@ -19,6 +19,7 @@ import {
   Download,
   User,
   Eye,
+  AlertTriangle,
 } from 'lucide-react'
 import proposalsApi from '../../../api/proposalsApi' // <- adjust path if needed
 import StatusBadge from '../../../shared/components/StatusBadge'
@@ -62,8 +63,6 @@ const CustomerProposalSignPage = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-
-
   const [checkedConsents, setCheckedConsents] = useState({})
   const [activeSigTab, setActiveSigTab] = useState('draw') // 'draw' | 'upload'
   const [signatureCaptured, setSignatureCaptured] = useState(false)
@@ -83,6 +82,10 @@ const CustomerProposalSignPage = () => {
 
   // Store signing session data for PDF URLs
   const [signingSession, setSigningSession] = useState(null)
+
+  // NEW: Verification state checking
+  const [isVerified, setIsVerified] = useState(false)
+  const [checkingVerification, setCheckingVerification] = useState(true)
 
   console.log('[CustomerProposalSignPage] routeProposalId:', routeProposalId, 'token:', token)
   console.log('[CustomerProposalSignPage] resolvedProposalId state:', resolvedProposalId)
@@ -115,6 +118,46 @@ const CustomerProposalSignPage = () => {
     queryFn: () => proposalsApi.getCustomerProposal(resolvedProposalId),
     enabled: !!resolvedProposalId && !linkError, // only run when we have a valid id
   })
+
+  // --------- Check verification status ----------
+  useEffect(() => {
+    if (!resolvedProposalId) {
+      return
+    }
+
+    // If user came via token (direct link), they went through CustomerVerificationPage
+    // Check sessionStorage for verification state
+    const stored = sessionStorage.getItem(`verified_${resolvedProposalId}`)
+    if (stored) {
+      try {
+        const verification = JSON.parse(stored)
+        // Check if verification is less than 30 minutes old
+        const thirtyMinutes = 30 * 60 * 1000
+        if (verification.idVerified && (Date.now() - verification.timestamp) < thirtyMinutes) {
+          console.log('[CustomerProposalSignPage] User verified via sessionStorage')
+          setIsVerified(true)
+          setCheckingVerification(false)
+          return
+        }
+      } catch (e) {
+        console.error('Error parsing verification state', e)
+      }
+    }
+
+    // If we have a token, user came from direct link route which goes through verification
+    // The verification page should have set sessionStorage, but if not, we trust the token flow
+    if (token) {
+      console.log('[CustomerProposalSignPage] User has token - assuming verified via CustomerVerificationPage')
+      setIsVerified(true)
+      setCheckingVerification(false)
+      return
+    }
+
+    // Not verified - user came from dashboard without verification
+    console.log('[CustomerProposalSignPage] User NOT verified - needs identity verification')
+    setIsVerified(false)
+    setCheckingVerification(false)
+  }, [resolvedProposalId, token])
 
   if (linkError) {
     return (
@@ -261,7 +304,7 @@ const CustomerProposalSignPage = () => {
     }
     // Re-run when: tab changes, signing completes (view change), or loading finishes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSigTab, signingCompleted, isLoading])
+  }, [activeSigTab, signingCompleted, isLoading, isVerified])
 
   const handleClearCanvas = () => {
     if (!canvasRef.current) return
@@ -319,8 +362,6 @@ const CustomerProposalSignPage = () => {
 
       setSigningCompleted(true)
       setShowCelebration(true)
-
-      setSigningCompleted(true)
     },
     onError: (err) => {
       console.error('Error completing signing', err)
@@ -328,8 +369,13 @@ const CustomerProposalSignPage = () => {
     },
   })
 
+  // Show loading while checking verification
+  if (checkingVerification) {
+    return <Loading fullScreen message="Checking verification status..." />
+  }
 
   if (isLoading) return <Loading fullScreen message="Loading proposal..." />
+
   if (!proposal) {
     return (
       <div className="p-8 text-center">
@@ -337,6 +383,64 @@ const CustomerProposalSignPage = () => {
         <p className="text-sm text-gray-500">
           Tried to load proposal with id: <code>{String(resolvedProposalId)}</code>
         </p>
+      </div>
+    )
+  }
+
+  // --------- Verification Required Screen ----------
+  if (!isVerified && !signingCompleted) {
+    // Determine the correct verification route
+    // Map proposal IDs to demo tokens for now
+    const tokenMap = {
+      'prop-001': 'demo1',
+      'prop-002': 'demo2',
+      'prop-003': 'demo3',
+      'prop-005': 'business1'
+    }
+    const verificationToken = tokenMap[resolvedProposalId] || 'demo1'
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md text-center border border-gray-100">
+          <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Shield className="w-10 h-10 text-amber-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+            Identity Verification Required
+          </h1>
+          <p className="text-gray-600 mb-2">
+            For your security and to comply with <strong>eIDAS regulations</strong>, we need to verify your identity before you can sign this document.
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            This ensures that only you can sign documents intended for you.
+          </p>
+
+          {/* Proposal info card */}
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+            <p className="text-xs text-gray-500 mb-1">Document to sign:</p>
+            <p className="font-medium text-gray-900">{proposal.title}</p>
+            <p className="text-sm text-gray-600">{proposal.proposalRef}</p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => navigate(`/customer/sign/${verificationToken}`)}
+              className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/25"
+            >
+              Verify My Identity
+            </button>
+            <button
+              onClick={() => navigate('/customer/dashboard')}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+
+          <p className="mt-6 text-xs text-gray-500">
+            🔒 Your data is encrypted and protected under GDPR
+          </p>
+        </div>
       </div>
     )
   }

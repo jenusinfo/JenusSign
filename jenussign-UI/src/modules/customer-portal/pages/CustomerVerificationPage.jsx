@@ -229,6 +229,17 @@ const CustomerVerificationPage = () => {
       }
       const emailToUse = form.email || session.prefilledEmail
       setCustomerAuth(`customer-token-${Date.now()}`, { email: emailToUse })
+
+      // ✅ Store verification state in sessionStorage for session-based memory
+      // This allows users to navigate away and return without re-verifying
+      sessionStorage.setItem(`verified_${session.proposalId}`, JSON.stringify({
+        idVerified: true,
+        contactVerified: true,
+        method: verificationMethod || 'manual',
+        timestamp: Date.now(),
+        email: emailToUse
+      }))
+
       toast.success('Contact verified. Loading your proposal…')
       navigate(`/customer/proposals/${session.proposalId}/sign`)
     },
@@ -671,12 +682,12 @@ const CustomerVerificationPage = () => {
         {['front', 'back', 'selfie'].map((s, idx) => (
           <React.Fragment key={s}>
             <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${scanningStep === s ? 'bg-purple-600 text-white' :
-                (scanningStep === 'processing' || scanningStep === 'complete' ||
-                  (s === 'front' && idFrontImage) ||
-                  (s === 'back' && idBackImage) ||
-                  (s === 'selfie' && selfieImage))
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-200 text-gray-500'
+              (scanningStep === 'processing' || scanningStep === 'complete' ||
+                (s === 'front' && idFrontImage) ||
+                (s === 'back' && idBackImage) ||
+                (s === 'selfie' && selfieImage))
+                ? 'bg-green-500 text-white'
+                : 'bg-gray-200 text-gray-500'
               }`}>
               {(s === 'front' && idFrontImage) || (s === 'back' && idBackImage) || (s === 'selfie' && selfieImage) || scanningStep === 'processing' || scanningStep === 'complete'
                 ? <Check className="w-4 h-4" />
@@ -709,8 +720,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('upload')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
@@ -719,8 +730,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('camera', false)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
@@ -841,8 +852,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('upload')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
@@ -851,8 +862,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('camera', false)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
@@ -971,8 +982,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('upload')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Upload className="w-4 h-4 inline mr-2" />
@@ -981,8 +992,8 @@ const CustomerVerificationPage = () => {
             <button
               onClick={() => toggleCaptureMode('camera', true)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               <Camera className="w-4 h-4 inline mr-2" />
@@ -1362,10 +1373,10 @@ const CustomerVerificationPage = () => {
             <React.Fragment key={s.key}>
               <div
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${step === s.key
-                    ? 'bg-primary-600 text-white'
-                    : idx < ['identity', 'contact', 'otp'].indexOf(step)
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-500'
+                  ? 'bg-primary-600 text-white'
+                  : idx < ['identity', 'contact', 'otp'].indexOf(step)
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-500'
                   }`}
               >
                 {idx < ['identity', 'contact', 'otp'].indexOf(step) ? (

@@ -4,7 +4,7 @@ import httpClient from './httpClient'
 const MOCK_MODE = true
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-// Mock proposals data
+// Mock proposals data - with PDF URLs for each proposal
 const mockProposals = [
   {
     id: 'prop-001',
@@ -18,7 +18,11 @@ const mockProposals = [
     lastActivityAt: '2025-11-11T08:30:00Z',
     expiryDate: '2025-12-01T00:00:00Z',
     createdByUserId: '2',
-	consents: [
+    // PDF URLs for Home Insurance
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
+    consents: [
       {
         proposalConsentId: 'pc-001',
         consentDefinitionId: 'cd-001',
@@ -45,22 +49,26 @@ const mockProposals = [
     proposalRef: 'PR-2025-0002',
     title: 'Motor Insurance Proposal PR-2025-0002',
     productType: 'Motor Insurance',
-    status: 'InProgress',
+    status: 'PendingSignature',
     createdAt: '2025-11-08T14:00:00Z',
     lastActivityAt: '2025-11-14T16:45:00Z',
     expiryDate: '2025-11-30T00:00:00Z',
     createdByUserId: '2',
-	consents: [
+    // PDF URLs for Motor Insurance
+    documentUrl: '/samples/motor-insurance-proposal-PR-2025-0002.pdf',
+    signedDocumentUrl: '/samples/demo-motor-signed-esealed.pdf',
+    auditTrailUrl: '/samples/motor-insurance-audit-trail-PR-2025-0002.pdf',
+    consents: [
       {
         proposalConsentId: 'pc-003',
         consentDefinitionId: 'cd-001',
         label: 'I accept the Terms & Conditions',
         controlType: 'Checkbox',
         isRequired: true,
-        value: true,
+        value: null,
       },
     ],
-    signatureStatus: 'Captured',
+    signatureStatus: 'NotCaptured',
   },
   {
     id: 'prop-003',
@@ -74,6 +82,10 @@ const mockProposals = [
     lastActivityAt: '2025-10-25T11:20:00Z',
     expiryDate: '2025-11-20T00:00:00Z',
     createdByUserId: '2',
+    // PDF URLs (reusing home for demo)
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
     consents: [],
     signatureStatus: 'Completed',
   },
@@ -94,6 +106,10 @@ const mockProposals = [
     signedAt: '2024-09-20T14:30:00Z',
     expiryDate: '2024-10-15T23:59:59Z',
     createdByUserId: '2',
+    // PDF URLs (reusing home for demo)
+    documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+    signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+    auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
     consents: [],
     signatureStatus: 'Completed',
   },
@@ -113,6 +129,10 @@ const mockProposals = [
     lastActivityAt: '2024-11-18T09:00:00Z',
     expiryDate: '2024-12-18T23:59:59Z',
     createdByUserId: '2',
+    // PDF URLs (reusing motor for demo)
+    documentUrl: '/samples/motor-insurance-proposal-PR-2025-0002.pdf',
+    signedDocumentUrl: '/samples/demo-motor-signed-esealed.pdf',
+    auditTrailUrl: '/samples/motor-insurance-audit-trail-PR-2025-0002.pdf',
     consents: [
       {
         proposalConsentId: 'pc-004',
@@ -142,14 +162,14 @@ const proposalsApi = {
     if (MOCK_MODE) {
       await delay(500)
       let filtered = [...mockProposals]
-      
+
       if (params.customerId) {
         filtered = filtered.filter((p) => p.customerId === params.customerId)
       }
       if (params.status) {
         filtered = filtered.filter((p) => p.status === params.status)
       }
-      
+
       return {
         items: filtered,
         totalCount: filtered.length,
@@ -179,6 +199,10 @@ const proposalsApi = {
         status: 'Draft',
         createdAt: new Date().toISOString(),
         lastActivityAt: new Date().toISOString(),
+        // Default PDF URLs for new proposals
+        documentUrl: '/samples/home-insurance-proposal-PR-2025-0001.pdf',
+        signedDocumentUrl: '/samples/demo-home-signed-esealed.pdf',
+        auditTrailUrl: '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
       }
       mockProposals.push(newProposal)
       return newProposal
@@ -231,6 +255,7 @@ const proposalsApi = {
       await delay(300)
       const proposal = mockProposals.find((p) => p.id === id)
       if (!proposal) throw new Error('Proposal not found')
+      // Return full proposal including PDF URLs
       return proposal
     }
     return httpClient.get(`/customer/proposals/${id}`)
@@ -292,7 +317,7 @@ const proposalsApi = {
       await delay(600)
       return { success: true, signatureId: `sig${Date.now()}` }
     }
-    return httpClient.post(`/customer/proposals/${proposalId}/signature`, data)
+    return httpClient.post(`/proposals/${proposalId}/signature`, data)
   },
 
   // Customer portal: Request signing OTP
@@ -306,45 +331,46 @@ const proposalsApi = {
   },
 
   // Customer portal: Verify signing OTP (final sign)
-  // Customer portal: Verify signing OTP (final sign)
-	async verifySigningOtp(proposalId, otp) {
-	  if (MOCK_MODE) {
-		await delay(1500) // Simulate PDF signing process
+  async verifySigningOtp(proposalId, otp) {
+    if (MOCK_MODE) {
+      await delay(1500) // Simulate PDF signing process
 
-		const proposal = mockProposals.find((p) => p.id === proposalId)
+      const proposal = mockProposals.find((p) => p.id === proposalId)
 
-		if (!proposal) {
-		  throw new Error('Proposal not found')
-		}
+      if (!proposal) {
+        throw new Error('Proposal not found')
+      }
 
-		if (otp === '123456') {
-		  const now = new Date().toISOString()
+      if (otp === '123456') {
+        const now = new Date().toISOString()
 
-		  // ✅ update in-memory proposal so UI sees "Signed"
-		  proposal.status = 'Signed'
-		  proposal.signatureStatus = 'Completed'
-		  proposal.lastActivityAt = now
+        // ✅ update in-memory proposal so UI sees "Signed"
+        proposal.status = 'Signed'
+        proposal.signatureStatus = 'Completed'
+        proposal.lastActivityAt = now
+        proposal.signedAt = now
 
-		  return {
-			success: true,
-			status: proposal.status,
-			finalDocumentId: `final-doc-${Date.now()}`,
-		  }
-		}
+        return {
+          success: true,
+          status: proposal.status,
+          finalDocumentId: `final-doc-${Date.now()}`,
+        }
+      }
 
-		throw new Error('Invalid OTP')
-	  }
+      throw new Error('Invalid OTP')
+    }
 
-	  return httpClient.post(`/customer/proposals/${proposalId}/verify-signing-otp`, { otp })
-	},
+    return httpClient.post(`/customer/proposals/${proposalId}/verify-signing-otp`, { otp })
+  },
 
 
   // Get proposal document
   async getDocument(proposalId) {
     if (MOCK_MODE) {
       await delay(300)
+      const proposal = mockProposals.find((p) => p.id === proposalId)
       return {
-        url: 'https://example.com/sample.pdf',
+        url: proposal?.documentUrl || '/samples/home-insurance-proposal-PR-2025-0001.pdf',
       }
     }
     return httpClient.get(`/customer/proposals/${proposalId}/document`)
@@ -378,15 +404,19 @@ const proposalsApi = {
     return httpClient.get(`/proposals/${proposalId}/audit-events`)
   },
 
-  // Get audit package
+  // Get audit package - returns dynamic URLs based on proposal
   async getAuditPackage(proposalId) {
     if (MOCK_MODE) {
       await delay(800)
+
+      // Find the proposal to get its specific PDF URLs
+      const proposal = mockProposals.find((p) => p.id === proposalId)
+
       return {
         proposalId,
-        signedPdfUrl: 'https://example.com/signed-proposal.pdf',
-        auditPdfUrl: 'https://example.com/audit-evidence.pdf',
-        evidenceJsonUrl: 'https://example.com/evidence.json',
+        signedPdfUrl: proposal?.signedDocumentUrl || '/samples/demo-home-signed-esealed.pdf',
+        auditPdfUrl: proposal?.auditTrailUrl || '/samples/home-insurance-audit-trail-PR-2025-0001.pdf',
+        evidenceJsonUrl: '/samples/evidence.json',
       }
     }
     return httpClient.get(`/proposals/${proposalId}/audit-package`)

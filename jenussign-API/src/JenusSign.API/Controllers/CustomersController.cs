@@ -61,7 +61,7 @@ public class CustomersController : ControllerBase
                 c.LastName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                 c.Email.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                 c.BusinessKey.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                (c.CompanyName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+                (!string.IsNullOrEmpty(c.CompanyName) && c.CompanyName.Contains(search, StringComparison.OrdinalIgnoreCase)));
         }
 
         var totalCount = query.Count();

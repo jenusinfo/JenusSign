@@ -69,8 +69,7 @@ public class TimestampService : ITimestampService
             
             var token = tsResponse.TimeStampToken;
             var timestamp = token.TimeStampInfo.GenTime;
-            var serialNumber = token.TimeStampToken.SignedData.SignerInfos
-                .GetEnumerator().Current?.SerialNumber?.ToString() ?? "Unknown";
+            var serialNumber = token.TimeStampInfo.SerialNumber?.ToString() ?? "Unknown";
             
             _logger.LogInformation(
                 "Timestamp obtained successfully from {Authority} at {Timestamp}",
@@ -95,6 +94,9 @@ public class TimestampService : ITimestampService
     {
         try
         {
+            // No async calls yet; keep signature awaitable for future TSA checks
+            await Task.CompletedTask;
+
             var tokenBytes = Convert.FromBase64String(timestampToken);
             var hashBytes = Convert.FromHexString(documentHash);
             

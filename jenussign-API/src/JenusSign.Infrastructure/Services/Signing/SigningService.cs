@@ -8,6 +8,7 @@ using JenusSign.Core.Entities;
 using JenusSign.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Security.Cryptography.X509Certificates;
 
 namespace JenusSign.Infrastructure.Services.Signing;
 
@@ -56,6 +57,7 @@ public class AzureKeyVaultSigningService : ISigningService
 
             // Get certificate for metadata
             var certificate = await certificateClient.GetCertificateAsync(_certificateName, cancellationToken);
+            var certX509 = X509CertificateLoader.LoadCertificate(certificate.Value.Cer);
             
             // Get the key for signing
             var key = await keyClient.GetKeyAsync(_certificateName, cancellationToken: cancellationToken);
@@ -76,18 +78,16 @@ public class AzureKeyVaultSigningService : ISigningService
             
             _logger.LogInformation(
                 "Document signed successfully. Certificate: {Subject}, Serial: {Serial}",
-                certificate.Value.Properties.Subject,
-                certificate.Value.Properties.X509Thumbprint != null 
-                    ? Convert.ToHexString(certificate.Value.Properties.X509Thumbprint) 
-                    : "N/A");
+                certX509.Subject,
+                certX509.SerialNumber);
 
             return new SignatureResult(
                 Signature: signature,
-                CertificateSerialNumber: certificate.Value.Properties.Version ?? "Unknown",
+                CertificateSerialNumber: certX509.SerialNumber,
                 CertificateThumbprint: certificate.Value.Properties.X509Thumbprint != null 
                     ? Convert.ToHexString(certificate.Value.Properties.X509Thumbprint)
                     : "Unknown",
-                CertificateSubject: certificate.Value.Properties.Subject ?? "Unknown",
+                CertificateSubject: certX509.Subject,
                 SignedAt: DateTime.UtcNow
             );
         }
@@ -141,6 +141,7 @@ public class AzureKeyVaultSigningService : ISigningService
         
         var certificate = await certificateClient.GetCertificateAsync(_certificateName, cancellationToken);
         var props = certificate.Value.Properties;
+        var certX509 = X509CertificateLoader.LoadCertificate(certificate.Value.Cer);
         
         // Build certificate chain (simplified - in production you'd retrieve the full chain)
         var certificateChain = new[]
@@ -151,9 +152,9 @@ public class AzureKeyVaultSigningService : ISigningService
         };
 
         return new CertificateInfo(
-            Subject: props.Subject ?? "Unknown",
+            Subject: certX509.Subject,
             Issuer: "JCC Cyprus Trust Center", // Would come from actual cert
-            SerialNumber: props.Version ?? "Unknown",
+            SerialNumber: certX509.SerialNumber,
             Thumbprint: props.X509Thumbprint != null 
                 ? Convert.ToHexString(props.X509Thumbprint) 
                 : "Unknown",

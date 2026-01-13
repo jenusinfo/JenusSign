@@ -5,7 +5,8 @@ import { motion } from 'framer-motion'
 import SignatureEvidenceCard from './SignatureEvidenceCard'
 import SignatureCelebrationPopup from './SignatureCelebrationPopup'
 import MobileFriendlyPdfViewer from './MobileFriendlyPdfViewer'
-import { signingSessionsApi } from '../../../api/mockApi'
+import DocumentCarousel from './DocumentCarousel'
+import { envelopesApi } from '../../../api/envelopeMockApi'
 
 import {
   ArrowLeft,
@@ -20,173 +21,159 @@ import {
   User,
   Eye,
   AlertTriangle,
+  Package,
 } from 'lucide-react'
-import proposalsApi from '../../../api/proposalsApi' // <- adjust path if needed
 import StatusBadge from '../../../shared/components/StatusBadge'
 import Loading from '../../../shared/components/Loading'
 import { formatDate } from '../../../shared/utils/formatters'
 
-// Mobile PDF Preview - Shows embedded viewer with option to open fullscreen
-const MobilePdfPreview = ({ src, title }) => {
-  return (
-    <div className="w-full overflow-hidden">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <h3 className="text-base font-semibold text-gray-900 truncate">{title}</h3>
-        <a
-          href={src}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 flex-shrink-0"
-        >
-          <Eye className="w-3.5 h-3.5" />
-          Fullscreen
-        </a>
-      </div>
-
-      <div className="rounded-xl overflow-hidden border border-gray-200">
-        <MobileFriendlyPdfViewer
-          src={src}
-          title={title}
-          height="350px"
-          showDownload={true}
-        />
-      </div>
-    </div>
-  )
-}
-
 const CustomerProposalSignPage = () => {
   // We support BOTH:
-  // - /customer/proposals/:resolvedProposalId/sign
-  // - /customer/sign/:token
+  // - /customer/proposals/:resolvedProposalId/sign (legacy)
+  // - /customer/sign/:token (email link)
   const { proposalId: routeProposalId, token } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  // Envelope state (replaces proposal)
+  const [envelope, setEnvelope] = useState(null)
+  const [envelopeLoading, setEnvelopeLoading] = useState(true)
+  const [linkError, setLinkError] = useState(null)
+
+  // Document carousel state
+  const [allDocsConfirmed, setAllDocsConfirmed] = useState(false)
+  const [confirmedDocIds, setConfirmedDocIds] = useState([])
+
+  // Consent state
   const [checkedConsents, setCheckedConsents] = useState({})
+
+  // Signature state
   const [activeSigTab, setActiveSigTab] = useState('draw') // 'draw' | 'upload'
   const [signatureCaptured, setSignatureCaptured] = useState(false)
   const [uploadedSignatureFile, setUploadedSignatureFile] = useState(null)
 
+  // OTP & completion state
   const [showOtp, setShowOtp] = useState(false)
   const [otp, setOtp] = useState('')
   const [signingCompleted, setSigningCompleted] = useState(false)
 
+  // Result state
   const [signedPackage, setSignedPackage] = useState(null)
   const [evidence, setEvidence] = useState(null)
   const [showCelebration, setShowCelebration] = useState(false)
 
-  // NEW: resolve proposalId from token (for email link)
-  const [resolvedProposalId, setResolvedProposalId] = useState(routeProposalId || null)
-  const [linkError, setLinkError] = useState(null)
-
-  // Store signing session data for PDF URLs
-  const [signingSession, setSigningSession] = useState(null)
-
-  // NEW: Verification state checking
+  // Verification state
   const [isVerified, setIsVerified] = useState(false)
   const [checkingVerification, setCheckingVerification] = useState(true)
 
-  console.log('[CustomerProposalSignPage] routeProposalId:', routeProposalId, 'token:', token)
-  console.log('[CustomerProposalSignPage] resolvedProposalId state:', resolvedProposalId)
-
+  // Refs
   const canvasRef = useRef(null)
   const isDrawingRef = useRef(false)
   const otpRef = useRef(null)
 
-  // If we have a token but no proposalId, look up the signing session
-  useEffect(() => {
-    if (!routeProposalId && token) {
-      signingSessionsApi
-        .getSessionByToken(token)
-        .then((session) => {
-          // this should be 'prop-001' from DEMO_SIGNING_SESSIONS
-          setResolvedProposalId(session.proposalId)
-          // Store the full session for PDF URLs
-          setSigningSession(session)
-        })
-        .catch((err) => {
-          console.error('Failed to resolve signing session', err)
-          setLinkError(err.message || 'Invalid or expired signing link.')
-        })
-    }
-  }, [routeProposalId, token])
+  console.log('[CustomerProposalSignPage] routeProposalId:', routeProposalId, 'token:', token)
 
-  // --------- Load proposal ----------
-  const { data: proposal, isLoading } = useQuery({
-    queryKey: ['customer-proposal', resolvedProposalId],
-    queryFn: () => proposalsApi.getCustomerProposal(resolvedProposalId),
-    enabled: !!resolvedProposalId && !linkError, // only run when we have a valid id
-  })
+  // --------- Load envelope by token or proposalId ----------
+  useEffect(() => {
+    const loadEnvelope = async () => {
+      try {
+        setEnvelopeLoading(true)
+        
+        if (token) {
+          // Load via token (email link)
+          const data = await envelopesApi.getEnvelopeByToken(token)
+          setEnvelope(data)
+        } else if (routeProposalId) {
+          // Legacy: load by proposal ID - map to envelope
+          // The proposalId maps to tokens: prop-001 -> demo1, prop-002 -> demo2, etc.
+          const tokenMap = {
+            'prop-001': 'demo1',
+            'prop-002': 'demo2', 
+            'prop-003': 'demo3',
+            'prop-005': 'business1',
+          }
+          const mappedToken = tokenMap[routeProposalId]
+          
+          if (mappedToken) {
+            const data = await envelopesApi.getEnvelopeByToken(mappedToken)
+            setEnvelope(data)
+          } else {
+            // Try direct envelope lookup
+            try {
+              const data = await envelopesApi.getEnvelope(routeProposalId)
+              setEnvelope(data)
+            } catch {
+              throw new Error('Proposal not found')
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load envelope', err)
+        setLinkError(err.message || 'Invalid or expired signing link.')
+      } finally {
+        setEnvelopeLoading(false)
+      }
+    }
+
+    loadEnvelope()
+  }, [routeProposalId, token])
 
   // --------- Check verification status ----------
   useEffect(() => {
-    if (!resolvedProposalId) {
-      return
-    }
+    if (!envelope && !routeProposalId) return
 
-    // If user came via token (direct link), they went through CustomerVerificationPage
-    // Check sessionStorage for verification state
-    const stored = sessionStorage.getItem(`verified_${resolvedProposalId}`)
-    if (stored) {
-      try {
-        const verification = JSON.parse(stored)
-        // Check if verification is less than 30 minutes old
-        const thirtyMinutes = 30 * 60 * 1000
-        if (verification.idVerified && (Date.now() - verification.timestamp) < thirtyMinutes) {
-          console.log('[CustomerProposalSignPage] User verified via sessionStorage')
-          setIsVerified(true)
-          setCheckingVerification(false)
-          return
+    // Try multiple possible verification keys for backward compatibility
+    // The verification page stores with proposalId (e.g., 'prop-001')
+    const keysToCheck = [
+      routeProposalId && `verified_${routeProposalId}`,           // e.g., verified_prop-001
+      envelope?.id && `verified_${envelope.id}`,                  // e.g., verified_env-001
+      envelope?.session?.proposalId && `verified_${envelope.session.proposalId}`, // from session
+      token && `verified_token_${token}`,                         // token-based
+    ].filter(Boolean)
+
+    for (const key of keysToCheck) {
+      const stored = sessionStorage.getItem(key)
+      if (stored) {
+        try {
+          const verification = JSON.parse(stored)
+          const thirtyMinutes = 30 * 60 * 1000
+          if (verification.idVerified && (Date.now() - verification.timestamp) < thirtyMinutes) {
+            console.log('[CustomerProposalSignPage] User verified via sessionStorage key:', key)
+            setIsVerified(true)
+            setCheckingVerification(false)
+            return
+          }
+        } catch (e) {
+          console.error('Error parsing verification state', e)
         }
-      } catch (e) {
-        console.error('Error parsing verification state', e)
       }
     }
 
     // If we have a token, user came from direct link route which goes through verification
-    // The verification page should have set sessionStorage, but if not, we trust the token flow
     if (token) {
-      console.log('[CustomerProposalSignPage] User has token - assuming verified via CustomerVerificationPage')
+      console.log('[CustomerProposalSignPage] User has token - assuming verified')
       setIsVerified(true)
       setCheckingVerification(false)
       return
     }
 
-    // Not verified - user came from dashboard without verification
-    console.log('[CustomerProposalSignPage] User NOT verified - needs identity verification')
+    // Not verified
     setIsVerified(false)
     setCheckingVerification(false)
-  }, [resolvedProposalId, token])
+  }, [envelope, token, routeProposalId])
 
-  if (linkError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white p-8 rounded-2xl shadow-md max-w-md text-center">
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Signing link problem</h1>
-          <p className="text-gray-600 mb-4">{linkError}</p>
-          <button
-            onClick={() => navigate('/customer/login')}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
-          >
-            Go to customer login
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Initialize consent checkboxes
+  // --------- Initialize consent checkboxes ----------
   useEffect(() => {
-    if (proposal?.consents) {
+    if (envelope?.consents) {
       const init = {}
-      proposal.consents.forEach(c => {
-        init[c.proposalConsentId] = !!c.value
+      envelope.consents.forEach(c => {
+        init[c.id] = !!c.response
       })
       setCheckedConsents(init)
     }
-  }, [proposal])
+  }, [envelope])
 
+  // --------- Scroll to OTP when shown ----------
   useEffect(() => {
     if (showOtp && otpRef.current) {
       otpRef.current.scrollIntoView({
@@ -196,7 +183,6 @@ const CustomerProposalSignPage = () => {
     }
   }, [showOtp])
 
-
   // --------- Canvas helpers ----------
   const getPos = (e) => {
     const canvas = canvasRef.current
@@ -205,7 +191,6 @@ const CustomerProposalSignPage = () => {
     const clientX = e.touches ? e.touches[0].clientX : e.clientX
     const clientY = e.touches ? e.touches[0].clientY : e.clientY
 
-    // Scale coordinates from CSS display size to canvas internal resolution
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
 
@@ -241,8 +226,7 @@ const CustomerProposalSignPage = () => {
     setSignatureCaptured(true)
   }
 
-  // MOBILE FIX: Handle touch events with native listeners to prevent scroll
-  // This ensures preventDefault works (React uses passive listeners by default)
+  // Touch event handling for mobile
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -252,7 +236,6 @@ const CustomerProposalSignPage = () => {
       const touch = e.touches[0] || e.changedTouches[0]
       if (!touch) return { x: 0, y: 0 }
 
-      // IMPORTANT: Scale coordinates from CSS display size to canvas internal resolution
       const scaleX = canvas.width / rect.width
       const scaleY = canvas.height / rect.height
 
@@ -263,7 +246,7 @@ const CustomerProposalSignPage = () => {
     }
 
     const handleTouchStart = (e) => {
-      e.preventDefault() // Prevent scroll
+      e.preventDefault()
       const ctx = canvas.getContext('2d')
       const { x, y } = getPos(e)
       ctx.beginPath()
@@ -272,7 +255,7 @@ const CustomerProposalSignPage = () => {
     }
 
     const handleTouchMove = (e) => {
-      e.preventDefault() // Prevent scroll
+      e.preventDefault()
       if (!isDrawingRef.current) return
       const ctx = canvas.getContext('2d')
       const { x, y } = getPos(e)
@@ -290,7 +273,6 @@ const CustomerProposalSignPage = () => {
       setSignatureCaptured(true)
     }
 
-    // Attach with passive: false to allow preventDefault
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false })
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false })
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false })
@@ -302,9 +284,7 @@ const CustomerProposalSignPage = () => {
       canvas.removeEventListener('touchend', handleTouchEnd)
       canvas.removeEventListener('touchcancel', handleTouchEnd)
     }
-    // Re-run when: tab changes, signing completes (view change), or loading finishes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSigTab, signingCompleted, isLoading, isVerified])
+  }, [activeSigTab, signingCompleted, envelopeLoading, isVerified, allDocsConfirmed])
 
   const handleClearCanvas = () => {
     if (!canvasRef.current) return
@@ -321,44 +301,42 @@ const CustomerProposalSignPage = () => {
     setSignatureCaptured(true)
   }
 
+  // --------- Document confirmation handler ----------
+  const handleDocumentConfirmed = async (docId, index) => {
+    setConfirmedDocIds(prev => [...prev, docId])
+    
+    // Track in API
+    if (envelope) {
+      try {
+        await envelopesApi.confirmDocumentViewed(envelope.id, docId)
+      } catch (err) {
+        console.error('Failed to track document confirmation', err)
+      }
+    }
+  }
+
+  const handleAllDocsConfirmed = () => {
+    setAllDocsConfirmed(true)
+  }
+
   // --------- Mutation: complete signing ----------
   const completeSigningMutation = useMutation({
-    // we pass the OTP as the variable
-    mutationFn: (otpCode) => proposalsApi.verifySigningOtp(resolvedProposalId, otpCode),
-    onSuccess: async (result, otpCode) => {
-      // Fetch signed & audit PDF URLs
-      const pkg = await proposalsApi.getAuditPackage(resolvedProposalId)
-      setSignedPackage(pkg)
-
-      // Update the single proposal in cache
-      queryClient.setQueryData(['customer-proposal', resolvedProposalId], (prev) =>
-        prev
-          ? {
-            ...prev,
-            status: 'Signed',
-            signatureStatus: 'Completed',
-          }
-          : prev
-      )
-
-      // Invalidate the list so dashboard refreshes
-      queryClient.invalidateQueries(['customer-proposals'])
-      setEvidence({
-        documentHash:
-          'SHA256:a3f5b9c2e8d1f4a7b6c3e92df58ab1cde74df8f36b9c25ed8f1a4b7c0e3d6f9a2',
-        timestamp: new Date().toLocaleString(), // later from backend
-        ip: '192.168.1.100',                    // later from backend
-        device: 'Chrome on Windows 10',         // later from backend
-        otpRef: 'OTP-2025-10-26-XXX123',        // later from backend (masked)
-        signerId: proposal.customerId || 'CUS-12345',
-        agentId: 'AGT-67890',                   // later from backend
-        certificateChain: [
-          'Root CA: JCC Trust Services',
-          'Intermediate CA: JCC eIDAS Qualified',
-          'End Entity: JenusSign Platform Certificate',
-        ],
-        eidasLevel: 'eIDAS Article 26 Compliant',
+    mutationFn: (otpCode) => envelopesApi.completeSigning(envelope.id, otpCode),
+    onSuccess: async (result) => {
+      setSignedPackage({
+        signedPdfUrl: result.signedDocumentUrl,
+        auditPdfUrl: result.auditTrailUrl,
       })
+
+      // Update envelope in local state
+      setEnvelope(prev => ({
+        ...prev,
+        status: 'SIGNED',
+        signedAt: result.envelope.signedAt,
+      }))
+
+      // Set evidence from result
+      setEvidence(result.evidence)
 
       setSigningCompleted(true)
       setShowCelebration(true)
@@ -369,19 +347,74 @@ const CustomerProposalSignPage = () => {
     },
   })
 
-  // Show loading while checking verification
-  if (checkingVerification) {
-    return <Loading fullScreen message="Checking verification status..." />
+  // --------- OTP handling ----------
+  const handleStartSigning = async () => {
+    // Save signature to envelope first
+    if (envelope) {
+      try {
+        const signatureData = {
+          type: activeSigTab === 'draw' ? 'Drawn' : 'Uploaded',
+          imageBase64: activeSigTab === 'draw' ? canvasRef.current?.toDataURL() : null,
+        }
+        await envelopesApi.saveSignature(envelope.id, signatureData)
+      } catch (err) {
+        console.error('Failed to save signature', err)
+      }
+    }
+    
+    // Request OTP
+    try {
+      await envelopesApi.requestSigningOtp(envelope.id)
+    } catch (err) {
+      console.error('Failed to request OTP', err)
+    }
+    
+    setShowOtp(true)
   }
 
-  if (isLoading) return <Loading fullScreen message="Loading proposal..." />
+  const handleVerifyOtp = (e) => {
+    e.preventDefault()
 
-  if (!proposal) {
+    if (otp !== '123456') {
+      alert('Invalid OTP. Use 123456 for the demo.')
+      return
+    }
+    completeSigningMutation.mutate(otp)
+  }
+
+  const handleBackToDashboard = () => {
+    navigate('/customer/dashboard')
+  }
+
+  // --------- Error state ----------
+  if (linkError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white p-8 rounded-2xl shadow-md max-w-md text-center">
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Signing link problem</h1>
+          <p className="text-gray-600 mb-4">{linkError}</p>
+          <button
+            onClick={() => navigate('/customer/login')}
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          >
+            Go to customer login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // --------- Loading states ----------
+  if (checkingVerification || envelopeLoading) {
+    return <Loading fullScreen message="Loading..." />
+  }
+
+  if (!envelope) {
     return (
       <div className="p-8 text-center">
-        <p className="font-semibold mb-2">Proposal not found</p>
+        <p className="font-semibold mb-2">Envelope not found</p>
         <p className="text-sm text-gray-500">
-          Tried to load proposal with id: <code>{String(resolvedProposalId)}</code>
+          Unable to load the signing envelope.
         </p>
       </div>
     )
@@ -389,15 +422,12 @@ const CustomerProposalSignPage = () => {
 
   // --------- Verification Required Screen ----------
   if (!isVerified && !signingCompleted) {
-    // Determine the correct verification route
-    // Map proposal IDs to demo tokens for now
     const tokenMap = {
-      'prop-001': 'demo1',
-      'prop-002': 'demo2',
-      'prop-003': 'demo3',
-      'prop-005': 'business1'
+      'env-001': 'demo1',
+      'env-002': 'demo2',
+      'env-003': 'demo3',
     }
-    const verificationToken = tokenMap[resolvedProposalId] || 'demo1'
+    const verificationToken = token || tokenMap[envelope.id] || 'demo1'
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4">
@@ -409,17 +439,19 @@ const CustomerProposalSignPage = () => {
             Identity Verification Required
           </h1>
           <p className="text-gray-600 mb-2">
-            For your security and to comply with <strong>eIDAS regulations</strong>, we need to verify your identity before you can sign this document.
+            For your security and to comply with <strong>eIDAS regulations</strong>, we need to verify your identity before you can sign.
           </p>
           <p className="text-sm text-gray-500 mb-6">
             This ensures that only you can sign documents intended for you.
           </p>
 
-          {/* Proposal info card */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
-            <p className="text-xs text-gray-500 mb-1">Document to sign:</p>
-            <p className="font-medium text-gray-900">{proposal.title}</p>
-            <p className="text-sm text-gray-600">{proposal.proposalRef}</p>
+            <p className="text-xs text-gray-500 mb-1">Documents to sign:</p>
+            <p className="font-medium text-gray-900">{envelope.title}</p>
+            <p className="text-sm text-gray-600">{envelope.referenceNumber}</p>
+            <p className="text-xs text-gray-500 mt-2">
+              {envelope.documents?.length || 0} document(s) in this envelope
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -436,21 +468,16 @@ const CustomerProposalSignPage = () => {
               Back to Dashboard
             </button>
           </div>
-
-          <p className="mt-6 text-xs text-gray-500">
-            🔒 Your data is encrypted and protected under GDPR
-          </p>
         </div>
       </div>
     )
   }
 
-  // DYNAMIC PDF URLs - use proposal data or signing session, with fallbacks
-  const draftPdfUrl = proposal.documentUrl || signingSession?.documentUrl || '/samples/home-insurance-proposal-PR-2025-0001.pdf'
-  const signedPdfUrl = signedPackage?.signedPdfUrl || proposal.signedDocumentUrl || signingSession?.signedDocumentUrl || '/samples/demo-home-signed-esealed.pdf'
-  const auditPdfUrl = signedPackage?.auditPdfUrl || proposal.auditTrailUrl || signingSession?.auditTrailUrl || '/samples/home-insurance-audit-trail-PR-2025-0001.pdf'
+  // --------- PDF URLs ----------
+  const signedPdfUrl = signedPackage?.signedPdfUrl || envelope.signedDocumentUrl || '/samples/demo-home-signed-esealed.pdf'
+  const auditPdfUrl = signedPackage?.auditPdfUrl || envelope.auditTrailUrl || '/samples/home-insurance-audit-trail-PR-2025-0001.pdf'
 
-  // If signing is completed, show the "final" view
+  // --------- Signing Completed View ----------
   if (signingCompleted) {
     return (
       <>
@@ -472,19 +499,17 @@ const CustomerProposalSignPage = () => {
             <div className="grid gap-6 lg:grid-cols-3">
               {/* LEFT: Signed & eSealed Document card */}
               <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col">
-                {/* Header + download buttons */}
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div>
                     <h1 className="text-xl font-semibold text-gray-900">
-                      Final Signed &amp; eSealed Document
+                      Final Signed &amp; eSealed Documents
                     </h1>
                     <p className="text-xs text-gray-500 mt-1">
-                      Merged PDF containing your proposal and the audit trail page.
+                      All documents in this envelope have been signed and sealed.
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {/* Final merged PDF (proposal + audit page) */}
                     <a
                       href={signedPdfUrl}
                       target="_blank"
@@ -492,10 +517,9 @@ const CustomerProposalSignPage = () => {
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium"
                     >
                       <Download className="w-4 h-4" />
-                      <span>Download final PDF</span>
+                      <span>Download Signed PDF</span>
                     </a>
 
-                    {/* Audit trail PDF */}
                     <a
                       href={auditPdfUrl}
                       target="_blank"
@@ -503,7 +527,7 @@ const CustomerProposalSignPage = () => {
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium"
                     >
                       <FileText className="w-4 h-4" />
-                      <span>Audit trail PDF</span>
+                      <span>Audit Trail PDF</span>
                     </a>
                   </div>
                 </div>
@@ -513,98 +537,54 @@ const CustomerProposalSignPage = () => {
                   <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-green-800">
-                      Document Successfully Signed &amp; eSealed
+                      All Documents Successfully Signed &amp; eSealed
                     </p>
                     <p className="text-xs text-green-700 mt-1">
-                      Your signature has been applied, an electronic seal has been added, and the
-                      audit page is attached as the last page of the PDF.
+                      Your signature has been applied to all {envelope.documents?.length || 1} document(s), 
+                      an electronic seal has been added, and the audit trail is attached.
                     </p>
                   </div>
                 </div>
 
-                {/* Visual document illustration */}
-                <div className="flex-1 rounded-xl bg-gray-50 border border-gray-200 p-6 flex flex-col lg:flex-row items-center gap-8">
-                  {/* Fake "document thumbnail" */}
-                  <div className="relative w-40 h-56 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between overflow-hidden">
-                    {/* Header bar */}
-                    <div className="h-6 bg-gray-100 border-b border-gray-200 flex items-center px-3">
-                      <div className="w-2 h-2 rounded-full bg-red-400 mr-1" />
-                      <div className="w-2 h-2 rounded-full bg-amber-400 mr-1" />
-                      <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    </div>
-
-                    {/* Content lines */}
-                    <div className="flex-1 px-4 py-3 space-y-2">
-                      <div className="h-2 w-5/6 rounded bg-gray-100" />
-                      <div className="h-2 w-4/6 rounded bg-gray-100" />
-                      <div className="h-2 w-3/4 rounded bg-gray-100 mt-3" />
-                      <div className="h-2 w-2/3 rounded bg-gray-100" />
-                      <div className="h-2 w-1/2 rounded bg-gray-100" />
-                    </div>
-
-                    {/* Bottom: signature line + seal */}
-                    <div className="px-4 pb-4 pt-2">
-                      <div className="h-[1px] w-24 bg-gray-300 mb-1" />
-                      <p className="text-[9px] text-gray-500">Digitally signed</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <div className="h-7 w-12 rounded bg-gray-50 border border-dashed border-gray-300 flex items-center justify-center">
-                          <span className="text-[9px] text-gray-400">Sig</span>
+                {/* Documents list */}
+                <div className="flex-1 rounded-xl bg-gray-50 border border-gray-200 p-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-indigo-600" />
+                    Documents in This Envelope
+                  </h3>
+                  <div className="space-y-2">
+                    {envelope.documents?.map((doc, index) => (
+                      <div 
+                        key={doc.id}
+                        className="flex items-center justify-between bg-white rounded-lg px-4 py-3 border border-gray-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                            <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 text-sm">{doc.title}</p>
+                            <p className="text-xs text-gray-500">{doc.pages} pages</p>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-                          <Shield className="w-3 h-3" />
-                          <span>eSealed</span>
-                        </div>
+                        <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                          Signed
+                        </span>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Text details */}
-                  <div className="flex-1 space-y-3">
-                    <p className="text-sm font-medium text-gray-900">
-                      What this final PDF contains
-                    </p>
-                    <ul className="text-xs text-gray-700 space-y-2">
-                      <li className="flex items-start gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5" />
-                        <span>
-                          <strong>Insurance Proposal:</strong> all pages exactly as presented
-                          to the customer at signing time.
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5" />
-                        <span>
-                          <strong>Audit Page:</strong> an additional page appended at the end
-                          with signature evidence (timestamps, IP/device, OTP reference, and
-                          participant IDs).
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <Shield className="w-4 h-4 text-blue-600 mt-0.5" />
-                        <span>
-                          <strong>Platform eSeal:</strong> the PDF is protected with a
-                          platform certificate so tampering will be detected by PDF viewers
-                          (e.g. Adobe Reader).
-                        </span>
-                      </li>
-                    </ul>
-
-                    <p className="text-[11px] text-gray-500">
-                      To see the technical certificate details, open the PDF in Adobe Reader and
-                      check <em>Signature Properties &gt; Certificate Details</em>.
-                    </p>
+                    ))}
                   </div>
                 </div>
 
-                {/* Signed on info (kept from your original) */}
                 <p className="mt-3 text-[11px] text-gray-500">
-                  Signed on: {formatDate(proposal.signedAt || new Date().toISOString())}
+                  Signed on: {formatDate(envelope.signedAt || new Date().toISOString())}
                 </p>
               </div>
 
-
               {/* RIGHT: Signature Evidence card */}
-              <SignatureEvidenceCard evidence={evidence} auditPdfUrl={auditPdfUrl} />
+              <SignatureEvidenceCard 
+                evidence={evidence} 
+                auditPdfUrl={auditPdfUrl}
+              />
             </div>
           </div>
         </div>
@@ -612,39 +592,18 @@ const CustomerProposalSignPage = () => {
     )
   }
 
-
-
-  const requiredConsents = proposal.consents?.filter(c => c.isRequired) || []
-  const allRequiredConsentsChecked = requiredConsents.every(
-    c => checkedConsents[c.proposalConsentId]
-  )
+  // --------- Computed values for signing form ----------
+  const requiredConsents = envelope.consents?.filter(c => c.isRequired) || []
+  const allRequiredConsentsChecked = requiredConsents.every(c => checkedConsents[c.id])
 
   const canClickSign =
     !signingCompleted &&
-    (proposal.status === 'PendingSignature' || proposal.status === 'InProgress') &&
+    (envelope.status === 'PENDING' || envelope.status === 'DRAFT') &&
+    allDocsConfirmed &&
     allRequiredConsentsChecked &&
     signatureCaptured
 
-
-  // --------- OTP handling ----------
-  const handleStartSigning = () => {
-    setShowOtp(true)
-  }
-
-  const handleVerifyOtp = (e) => {
-    e.preventDefault()
-
-    if (otp !== '123456') {
-      alert('Invalid OTP. Use 123456 for the demo.')
-      return
-    }
-    completeSigningMutation.mutate(otp)
-  }
-
-  const handleBackToDashboard = () => {
-    navigate('/customer/dashboard')
-  }
-
+  // --------- Main Signing View ----------
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       {/* Header */}
@@ -659,329 +618,316 @@ const CustomerProposalSignPage = () => {
           </button>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 truncate">{proposal.title}</h1>
-              <p className="text-gray-600 text-sm truncate">{proposal.proposalRef}</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 truncate">
+                {envelope.title}
+              </h1>
+              <p className="text-gray-600 text-sm truncate">
+                {envelope.referenceNumber} • {envelope.documents?.length || 0} document(s)
+              </p>
             </div>
-            <StatusBadge status={signingCompleted ? 'Signed' : proposal.status} />
+            <StatusBadge status={signingCompleted ? 'Signed' : envelope.status} />
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
-          {/* LEFT: PDF viewer - Hidden on mobile by default, shown in collapsible */}
+        <div className="space-y-6">
+          
+          {/* Step 1: Document Carousel */}
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="card h-full hidden lg:block"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              {signingCompleted ? 'Signed Document' : 'Proposal Document'}
-            </h2>
-
-            <MobileFriendlyPdfViewer
-              src={signingCompleted ? signedPdfUrl : draftPdfUrl}
-              title={proposal.title}
-              height="640px"
+            <DocumentCarousel
+              documents={envelope.documents?.map(doc => ({
+                id: doc.id,
+                title: doc.title,
+                url: doc.url,
+                pages: doc.pages,
+              })) || []}
+              onAllConfirmed={handleAllDocsConfirmed}
+              onDocumentConfirmed={handleDocumentConfirmed}
             />
-
-            {signingCompleted && (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <a
-                  href={signedPdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-primary flex items-center justify-center space-x-2"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Signed PDF</span>
-                </a>
-                <a
-                  href={auditPdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-secondary flex items-center justify-center space-x-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>View Audit Trail</span>
-                </a>
-              </div>
-            )}
           </motion.div>
 
-          {/* Mobile PDF Preview Card */}
-          <div className="lg:hidden bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-2 overflow-hidden">
-            <MobilePdfPreview
-              src={signingCompleted ? signedPdfUrl : draftPdfUrl}
-              title={signingCompleted ? 'Signed Document' : 'Proposal Document'}
-            />
-          </div>
+          {/* Step 2: Consent & Signature (only shown after all docs confirmed) */}
+          {allDocsConfirmed && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+            >
+              {/* Left column: Properties & Consents */}
+              <div className="space-y-4">
+                {/* Document Properties */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-3">Envelope Details</h2>
 
-          {/* RIGHT: properties, consent & signature as separate cards */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-4 sm:space-y-5 min-w-0"
-          >
-            {/* 1. Document Properties */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 overflow-hidden">
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">Document Properties</h2>
+                  <dl className="space-y-2 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-gray-600 flex-shrink-0">Reference:</dt>
+                      <dd className="font-mono text-xs text-gray-800 text-right truncate">
+                        {envelope.referenceNumber}
+                      </dd>
+                    </div>
 
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-600 flex-shrink-0">Type:</dt>
-                  <dd className="font-medium text-gray-900 text-right truncate">
-                    {proposal.type || 'Proposal'}
-                  </dd>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-gray-600 flex-shrink-0">Documents:</dt>
+                      <dd className="font-medium text-gray-900 text-right">
+                        {envelope.documents?.length || 0} document(s)
+                      </dd>
+                    </div>
+
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-gray-600 flex-shrink-0">Status:</dt>
+                      <dd className="font-semibold capitalize text-amber-600 text-right">
+                        {envelope.status?.toLowerCase() || 'pending'}
+                      </dd>
+                    </div>
+
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-gray-600 flex-shrink-0">Valid Until:</dt>
+                      <dd className="font-medium text-gray-900 text-right">
+                        {formatDate(envelope.expiryDate)}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
 
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-600 flex-shrink-0">Status:</dt>
-                  <dd className="font-semibold capitalize text-amber-600 text-right">
-                    {proposal.status?.toLowerCase() || 'pending'}
-                  </dd>
-                </div>
+                {/* Consent card */}
+                {envelope.consents && envelope.consents.length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-3">Your Consent</h2>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Please read and accept the terms below before signing.
+                    </p>
 
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-600 flex-shrink-0">Valid Until:</dt>
-                  <dd className="font-medium text-gray-900 text-right">
-                    {formatDate(proposal.expiryDate)}
-                  </dd>
-                </div>
+                    <div className="space-y-3">
+                      {envelope.consents.map((consent) => (
+                        <label
+                          key={consent.id}
+                          className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 flex-shrink-0"
+                            checked={!!checkedConsents[consent.id]}
+                            onChange={(e) =>
+                              setCheckedConsents((prev) => ({
+                                ...prev,
+                                [consent.id]: e.target.checked,
+                              }))
+                            }
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {consent.label}
+                              {consent.isRequired && (
+                                <span className="text-red-500 ml-1">*</span>
+                              )}
+                            </p>
+                            {consent.description && (
+                              <p className="text-xs text-gray-600 mt-1">
+                                {consent.description}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
 
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-600 flex-shrink-0">Document ID:</dt>
-                  <dd className="font-mono text-xs text-gray-800 text-right truncate max-w-[150px] sm:max-w-none">
-                    {proposal.proposalRef || proposal.id}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            {/* 2. Consent card */}
-            {proposal.consents && proposal.consents.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 overflow-hidden">
-                <h2 className="text-lg font-semibold text-gray-900 mb-3">Your Consent</h2>
-                <p className="text-sm text-gray-600 mb-3">
-                  Please read and accept the terms below before signing this document.
-                </p>
-
-                <div className="space-y-3">
-                  {proposal.consents.map((consent) => (
-                    <label
-                      key={consent.proposalConsentId}
-                      className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1 flex-shrink-0"
-                        checked={!!checkedConsents[consent.proposalConsentId]}
-                        onChange={(e) =>
-                          setCheckedConsents((prev) => ({
-                            ...prev,
-                            [consent.proposalConsentId]: e.target.checked,
-                          }))
-                        }
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900">
-                          {consent.label}
-                          {consent.isRequired && (
-                            <span className="text-red-500 ml-1">*</span>
-                          )}
-                        </p>
-                        {consent.description && (
-                          <p className="text-xs text-gray-600 mt-1">
-                            {consent.description}
-                          </p>
-                        )}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-
-                {!allRequiredConsentsChecked && (
-                  <p className="mt-2 text-xs text-red-600">
-                    Please accept all required consents to continue.
-                  </p>
+                    {!allRequiredConsentsChecked && (
+                      <p className="mt-2 text-xs text-red-600">
+                        Please accept all required consents to continue.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
 
-            {/* 3. Electronic Signature card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 overflow-hidden">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Electronic Signature
-              </h2>
+              {/* Right column: Signature & OTP */}
+              <div className="space-y-4">
+                {/* Electronic Signature card */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 overflow-hidden">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                    Electronic Signature
+                  </h2>
 
-              {/* Tabs */}
-              <div className="flex mb-4 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveSigTab('draw')}
-                  className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-sm font-medium border ${activeSigTab === 'draw'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                    }`}
-                >
-                  <FileText className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">Draw</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSigTab('upload')}
-                  className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-sm font-medium border ${activeSigTab === 'upload'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                    }`}
-                >
-                  <Upload className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">Upload</span>
-                </button>
-              </div>
-
-              {/* Draw / Upload UI */}
-              {activeSigTab === 'draw' ? (
-                <>
-                  <div
-                    className="border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 overflow-hidden"
-                    style={{
-                      touchAction: 'none',
-                      WebkitTouchCallout: 'none',
-                      WebkitUserSelect: 'none',
-                      userSelect: 'none'
-                    }}
-                  >
-                    <canvas
-                      ref={canvasRef}
-                      width={600}
-                      height={220}
-                      className="w-full h-[220px] cursor-crosshair block"
-                      style={{
-                        touchAction: 'none',
-                        WebkitTouchCallout: 'none',
-                        WebkitUserSelect: 'none',
-                        userSelect: 'none',
-                        msTouchAction: 'none'
-                      }}
-                      onMouseDown={handleStartDraw}
-                      onMouseMove={handleDraw}
-                      onMouseUp={handleEndDraw}
-                      onMouseLeave={handleEndDraw}
-                    // Touch events handled by native listeners in useEffect (for proper preventDefault support)
-                    />
+                  {/* Tabs */}
+                  <div className="flex mb-4 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSigTab('draw')}
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-sm font-medium border ${
+                        activeSigTab === 'draw'
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">Draw</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveSigTab('upload')}
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-sm font-medium border ${
+                        activeSigTab === 'upload'
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Upload className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">Upload</span>
+                    </button>
                   </div>
-                  <div className="mt-2 flex flex-col sm:flex-row justify-between gap-2 text-xs text-gray-500">
-                    <span>Use your mouse or finger (on touch devices) to draw your signature.</span>
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        type="button"
-                        onClick={handleClearCanvas}
-                        className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleClearCanvas()
-                          setSignatureCaptured(false)
-                          setCheckedConsents({})
+
+                  {/* Draw / Upload UI */}
+                  {activeSigTab === 'draw' ? (
+                    <>
+                      <div
+                        className="border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 overflow-hidden"
+                        style={{
+                          touchAction: 'none',
+                          WebkitTouchCallout: 'none',
+                          WebkitUserSelect: 'none',
+                          userSelect: 'none'
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium"
                       >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Upload signature image
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleSignatureUpload}
-                    className="block w-full text-sm text-gray-700"
-                  />
-                  {uploadedSignatureFile && (
-                    <div className="mt-2 w-full max-w-xs border rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden">
-                      <img
-                        src={URL.createObjectURL(uploadedSignatureFile)}
-                        alt="Signature preview"
-                        className="max-w-full max-h-32 object-contain"
+                        <canvas
+                          ref={canvasRef}
+                          width={600}
+                          height={220}
+                          className="w-full h-[220px] cursor-crosshair block"
+                          style={{
+                            touchAction: 'none',
+                            WebkitTouchCallout: 'none',
+                            WebkitUserSelect: 'none',
+                            userSelect: 'none',
+                            msTouchAction: 'none'
+                          }}
+                          onMouseDown={handleStartDraw}
+                          onMouseMove={handleDraw}
+                          onMouseUp={handleEndDraw}
+                          onMouseLeave={handleEndDraw}
+                        />
+                      </div>
+                      <div className="mt-2 flex flex-col sm:flex-row justify-between gap-2 text-xs text-gray-500">
+                        <span>Use your mouse or finger to draw your signature.</span>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={handleClearCanvas}
+                            className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleClearCanvas()
+                              setSignatureCaptured(false)
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Upload signature image
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleSignatureUpload}
+                        className="block w-full text-sm text-gray-700"
                       />
+                      {uploadedSignatureFile && (
+                        <div className="mt-2 w-full max-w-xs border rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden">
+                          <img
+                            src={URL.createObjectURL(uploadedSignatureFile)}
+                            alt="Signature preview"
+                            className="max-w-full max-h-32 object-contain"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* Main Sign button */}
-              <button
-                type="button"
-                disabled={!canClickSign}
-                onClick={handleStartSigning}
-                className={`mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
-          ${canClickSign
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span>Sign Document</span>
-              </button>
-            </div>
-
-            {/* 4. OTP card */}
-            {showOtp && !signingCompleted && (
-              <div
-                ref={otpRef}
-                className="bg-blue-50 rounded-2xl border border-blue-200 p-4 sm:p-5 space-y-3 overflow-hidden">
-                <div className="flex items-start gap-2">
-                  <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      Enter the one-time passcode
-                    </h3>
-                    <p className="text-xs text-gray-600">
-                      For this demo, use <span className="font-mono font-semibold">123456</span>.
-                    </p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleVerifyOtp} className="space-y-3">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent tracking-[0.3em] text-center font-mono text-lg bg-white"
-                    placeholder="••••••"
-                  />
+                  {/* Sign button */}
                   <button
-                    type="submit"
-                    disabled={completeSigningMutation.isPending}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
-              bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                    type="button"
+                    disabled={!canClickSign}
+                    onClick={handleStartSigning}
+                    className={`mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold ${
+                      canClickSign
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
-                    {completeSigningMutation.isPending ? (
-                      <span>Confirming…</span>
-                    ) : (
-                      <>
-                        <Shield className="w-4 h-4" />
-                        <span>Confirm Signature</span>
-                      </>
-                    )}
+                    <Shield className="w-4 h-4" />
+                    <span>Sign All Documents ({envelope.documents?.length || 0})</span>
                   </button>
-                </form>
-              </div>
-            )}
-          </motion.div>
 
+                  {!canClickSign && !signatureCaptured && allRequiredConsentsChecked && (
+                    <p className="mt-2 text-xs text-amber-600 text-center">
+                      Please draw or upload your signature above
+                    </p>
+                  )}
+                </div>
+
+                {/* OTP card */}
+                {showOtp && !signingCompleted && (
+                  <div
+                    ref={otpRef}
+                    className="bg-blue-50 rounded-2xl border border-blue-200 p-4 sm:p-5 space-y-3 overflow-hidden"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          Enter the one-time passcode
+                        </h3>
+                        <p className="text-xs text-gray-600">
+                          For this demo, use <span className="font-mono font-semibold">123456</span>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleVerifyOtp} className="space-y-3">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent tracking-[0.3em] text-center font-mono text-lg bg-white"
+                        placeholder="••••••"
+                      />
+                      <button
+                        type="submit"
+                        disabled={completeSigningMutation.isPending}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                      >
+                        {completeSigningMutation.isPending ? (
+                          <span>Signing all documents…</span>
+                        ) : (
+                          <>
+                            <Shield className="w-4 h-4" />
+                            <span>Confirm & Sign All Documents</span>
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

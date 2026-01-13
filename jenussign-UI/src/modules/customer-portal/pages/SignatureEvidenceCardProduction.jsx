@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { QRCodeSVG } from 'qrcode.react' // npm install qrcode.react
 import {
   Shield,
   ChevronDown,
@@ -21,98 +22,6 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// QR Code Generator Component (no external dependency needed)
-function QRCodeCanvas({ value, size = 140 }) {
-  const canvasRef = useRef(null)
-
-  useEffect(() => {
-    if (!canvasRef.current || !value) return
-
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    
-    // Generate QR code matrix using a simple implementation
-    const qr = generateQRMatrix(value)
-    const moduleCount = qr.length
-    const moduleSize = size / moduleCount
-
-    // Clear canvas
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, size, size)
-
-    // Draw QR code modules
-    ctx.fillStyle = '#1a1a2e'
-    for (let row = 0; row < moduleCount; row++) {
-      for (let col = 0; col < moduleCount; col++) {
-        if (qr[row][col]) {
-          ctx.fillRect(
-            col * moduleSize,
-            row * moduleSize,
-            moduleSize,
-            moduleSize
-          )
-        }
-      }
-    }
-  }, [value, size])
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      className="rounded-lg"
-    />
-  )
-}
-
-// Simple QR Code matrix generator (for demo purposes)
-// In production, use a library like 'qrcode' for proper QR generation
-function generateQRMatrix(text) {
-  // This is a simplified visual representation
-  // For production, use: npm install qrcode and import QRCode from 'qrcode'
-  const size = 25
-  const matrix = Array(size).fill(null).map(() => Array(size).fill(false))
-  
-  // Add finder patterns (the three corner squares)
-  const addFinderPattern = (startRow, startCol) => {
-    for (let r = 0; r < 7; r++) {
-      for (let c = 0; c < 7; c++) {
-        if (r === 0 || r === 6 || c === 0 || c === 6 || 
-            (r >= 2 && r <= 4 && c >= 2 && c <= 4)) {
-          matrix[startRow + r][startCol + c] = true
-        }
-      }
-    }
-  }
-  
-  addFinderPattern(0, 0)
-  addFinderPattern(0, size - 7)
-  addFinderPattern(size - 7, 0)
-  
-  // Add timing patterns
-  for (let i = 8; i < size - 8; i++) {
-    matrix[6][i] = i % 2 === 0
-    matrix[i][6] = i % 2 === 0
-  }
-  
-  // Add data pattern based on text hash
-  let hash = 0
-  for (let i = 0; i < text.length; i++) {
-    hash = ((hash << 5) - hash) + text.charCodeAt(i)
-    hash = hash & hash
-  }
-  
-  for (let r = 9; r < size - 9; r++) {
-    for (let c = 9; c < size - 9; c++) {
-      const bit = (hash >> ((r * size + c) % 32)) & 1
-      matrix[r][c] = bit === 1 || (r + c) % 3 === 0
-    }
-  }
-  
-  return matrix
-}
-
 export default function SignatureEvidenceCard({ evidence, className = '' }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [copiedHash, setCopiedHash] = useState(false)
@@ -129,16 +38,18 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
     otpVerified,
     signerId,
     signerName,
+    signerIdMasked,
     agentId,
     agentName,
     certificateChain = [],
     proposalRef,
     verificationCode,
+    envelopeRef,
   } = evidence
 
   // Generate verification URL
   const verificationBaseUrl = 'https://verify.jenussign.com'
-  const verificationId = verificationCode || proposalRef?.replace(/-/g, '') || 'DEMO123'
+  const verificationId = verificationCode || envelopeRef || proposalRef?.replace(/-/g, '') || 'DEMO123'
   const verificationUrl = `${verificationBaseUrl}/${verificationId}`
 
   const handleCopyHash = async () => {
@@ -172,6 +83,7 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
+      timeZoneName: 'short',
     })
   }
 
@@ -230,7 +142,20 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
                   {/* QR Code */}
                   <div className="flex-shrink-0">
                     <div className="bg-white p-3 rounded-xl shadow-sm border border-indigo-100">
-                      <QRCodeCanvas value={verificationUrl} size={120} />
+                      <QRCodeSVG
+                        value={verificationUrl}
+                        size={120}
+                        level="M"
+                        includeMargin={false}
+                        bgColor="#ffffff"
+                        fgColor="#1e1b4b"
+                        imageSettings={{
+                          src: '/logo-icon.png', // Optional: Add your logo in center
+                          height: 24,
+                          width: 24,
+                          excavate: true,
+                        }}
+                      />
                     </div>
                   </div>
                   
@@ -391,7 +316,7 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
                     <span className="text-xs font-medium text-indigo-700">Signer</span>
                   </div>
                   <p className="text-sm font-medium text-gray-900">{signerName || 'Customer'}</p>
-                  <p className="text-xs text-gray-500 font-mono">{signerId || 'ID: ••••••89'}</p>
+                  <p className="text-xs text-gray-500 font-mono">{signerIdMasked || signerId || 'ID: ••••••89'}</p>
                 </div>
 
                 {/* Agent */}

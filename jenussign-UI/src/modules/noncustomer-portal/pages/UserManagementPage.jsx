@@ -1,275 +1,307 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Users, Plus, Shield, UserCircle, Building2, Search } from 'lucide-react'
-import { usersApi } from '../../../api/mockApi'
-import useAuthStore from '../../../stores/authStore'
+import {
+  Plus,
+  Search,
+  Users,
+  Mail,
+  Phone,
+  Shield,
+  ChevronRight,
+  Building2,
+  UserCircle,
+  CheckCircle2,
+  Filter,
+} from 'lucide-react'
 
-const StatCard = ({ label, value, icon }) => (
-  <div className="p-4 bg-white rounded-xl border flex items-center gap-3">
-    <div className="p-3 bg-gray-100 rounded-lg text-gray-600">{icon}</div>
-    <div>
-      <p className="text-gray-500 text-sm">{label}</p>
-      <p className="text-xl font-bold text-gray-900">{value}</p>
-    </div>
-  </div>
-);
-const roleIcons = {
-  Admin: Shield,
-  Employee: UserCircle,
-  Broker: Building2,
-  Agent: UserCircle,
-}
+const mockUsers = [
+  {
+    id: 'user-001',
+    name: 'Admin User',
+    email: 'admin@hydrainsurance.com.cy',
+    phone: '+357 22 100 100',
+    role: 'administrator',
+    department: 'IT',
+    status: 'active',
+    assignedBrokers: [],
+    assignedAgents: [],
+    lastLogin: '2025-01-17T10:00:00Z',
+    createdAt: '2020-01-01T00:00:00Z',
+  },
+  {
+    id: 'emp-001',
+    name: 'Elena Christodoulou',
+    email: 'elena.c@hydrainsurance.com.cy',
+    phone: '+357 99 555 666',
+    role: 'employee',
+    department: 'Sales',
+    status: 'active',
+    assignedBrokers: [{ id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' }],
+    assignedAgents: [{ id: 'agent-001', name: 'Maria Georgiou' }],
+    lastLogin: '2025-01-17T08:30:00Z',
+    createdAt: '2022-03-15T10:00:00Z',
+  },
+  {
+    id: 'emp-002',
+    name: 'Nikos Stavrou',
+    email: 'nikos.s@hydrainsurance.com.cy',
+    phone: '+357 99 777 888',
+    role: 'employee',
+    department: 'Underwriting',
+    status: 'active',
+    assignedBrokers: [{ id: 'broker-002', name: 'Mediterranean Insurance Services' }],
+    assignedAgents: [],
+    lastLogin: '2025-01-16T14:00:00Z',
+    createdAt: '2021-06-20T09:00:00Z',
+  },
+  {
+    id: 'emp-003',
+    name: 'Anna Kyriacou',
+    email: 'anna.k@hydrainsurance.com.cy',
+    phone: '+357 99 999 000',
+    role: 'employee',
+    department: 'Claims',
+    status: 'active',
+    assignedBrokers: [],
+    assignedAgents: [{ id: 'agent-002', name: 'Andreas Papadopoulos' }, { id: 'agent-003', name: 'Nikos Konstantinou' }],
+    lastLogin: '2025-01-17T09:15:00Z',
+    createdAt: '2023-01-10T11:00:00Z',
+  },
+  {
+    id: 'emp-004',
+    name: 'George Demetriou',
+    email: 'george.d@hydrainsurance.com.cy',
+    phone: '+357 99 111 222',
+    role: 'employee',
+    department: 'Operations',
+    status: 'inactive',
+    assignedBrokers: [],
+    assignedAgents: [],
+    lastLogin: '2024-12-01T16:00:00Z',
+    createdAt: '2022-08-01T08:00:00Z',
+  },
+]
 
-const roleColors = {
-  Admin: 'bg-red-100 text-red-800',
-  Employee: 'bg-blue-100 text-blue-800',
-  Broker: 'bg-orange-100 text-orange-800',
-  Agent: 'bg-green-100 text-green-800',
+const roleConfig = {
+  administrator: { label: 'Admin', color: 'bg-red-100 text-red-700', icon: Shield },
+  employee: { label: 'Employee', color: 'bg-blue-100 text-blue-700', icon: UserCircle },
 }
 
 const UserManagementPage = () => {
-  console.log('🔍 UserManagementPage loading...')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [roleFilter, setRoleFilter] = useState('ALL')
+  const [statusFilter, setStatusFilter] = useState('ALL')
 
-  const navigate = useNavigate();
-  const auth = useAuthStore();
-  
-  const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState('all')
-
-  const user = auth.user;
-  const isAdmin =
-    typeof auth.isAdmin === "function"
-      ? auth.isAdmin()
-      : user?.role === "Admin";
-
-  // Restrict access
-  if (!isAdmin) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">
-            Access Denied. Only administrators can access user management.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['users', { search, role: roleFilter }],
-    queryFn: () => usersApi.getUsers({
-      search: search || undefined,
-      role: roleFilter !== 'all' ? roleFilter : undefined,
-    }),
+  const filteredUsers = mockUsers.filter((user) => {
+    const matchesSearch =
+      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.department.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    const matchesRole = roleFilter === 'ALL' || user.role === roleFilter
+    const matchesStatus = statusFilter === 'ALL' || user.status === statusFilter
+    
+    return matchesSearch && matchesRole && matchesStatus
   })
 
-  const users = data?.items || []
-  const statistics = data?.statistics || {}
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
 
   return (
-    <div className="p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Manage brokers, agents, employees, and administrators
-            </p>
-          </div>
-          <button onClick={() => navigate("/portal/users/new")}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">
-            <Plus size={20} />
-            Add User
-          </button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Users</h1>
+          <p className="text-gray-500 mt-1">Manage employees and administrators</p>
         </div>
-      </div>
-
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Building2 size={24} className="text-orange-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Brokers</p>
-              <p className="text-2xl font-bold text-gray-900">{statistics.totalBrokers || 0}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <UserCircle size={24} className="text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Agents</p>
-              <p className="text-2xl font-bold text-gray-900">{statistics.totalAgents || 0}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <UserCircle size={24} className="text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Employees</p>
-              <p className="text-2xl font-bold text-gray-900">{statistics.totalEmployees || 0}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <Shield size={24} className="text-red-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Admins</p>
-              <p className="text-2xl font-bold text-gray-900">{statistics.totalAdmins || 0}</p>
-            </div>
-          </div>
-        </div>
+        <Link
+          to="/portal/users/new"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          Add User
+        </Link>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by name, email, or business key..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Search users by name, email, or department..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-
-          {/* Role Filter */}
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="all">All Roles</option>
-            <option value="Broker">Brokers</option>
-            <option value="Agent">Agents</option>
-            <option value="Employee">Employees</option>
-            <option value="Admin">Administrators</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center text-gray-500">Loading users...</div>
-        ) : users.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">No users found</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Business Key
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Broker
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => {
-                  const RoleIcon = roleIcons[user.role] || UserCircle
-                  return (
-                    <motion.tr
-                      key={user.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      onClick={() => navigate(`/portal/users/${user.id}`)}
-                      className="hover:bg-gray-50 cursor-pointer"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          {user.businessKey}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0">
-                            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                              <span className="text-primary-600 font-medium">
-                                {user.displayName.charAt(0)}
-                              </span>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{user.displayName}</div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${roleColors[user.role]}`}>
-                          <RoleIcon size={14} />
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {user.broker ? (
-                          <div>
-                            <div className="text-sm text-gray-900">{user.broker.displayName}</div>
-                            <div className="text-xs text-gray-500">{user.broker.businessKey}</div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          user.isActive
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {user.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-                    </motion.tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="flex gap-2">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="ALL">All Roles</option>
+              <option value="administrator">Administrator</option>
+              <option value="employee">Employee</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="ALL">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Summary */}
-      {!isLoading && users.length > 0 && (
-        <div className="mt-4 text-sm text-gray-600">
-          Showing {users.length} user{users.length !== 1 ? 's' : ''}
+      {/* Users Table */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="hidden lg:grid lg:grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
+          <div className="col-span-3">User</div>
+          <div className="col-span-2">Role</div>
+          <div className="col-span-2">Department</div>
+          <div className="col-span-2">Assignments</div>
+          <div className="col-span-2">Last Login</div>
+          <div className="col-span-1"></div>
         </div>
-      )}
+
+        <div className="divide-y divide-gray-100">
+          {filteredUsers.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-1">No users found</h3>
+              <p className="text-gray-500">Try adjusting your search or filters</p>
+            </div>
+          ) : (
+            filteredUsers.map((user, index) => {
+              const roleInfo = roleConfig[user.role]
+              const RoleIcon = roleInfo.icon
+              const totalAssignments = user.assignedBrokers.length + user.assignedAgents.length
+              
+              return (
+                <motion.div
+                  key={user.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: index * 0.03 }}
+                >
+                  <Link
+                    to={`/portal/users/${user.id}`}
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors"
+                  >
+                    {/* User Info */}
+                    <div className="col-span-1 lg:col-span-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-medium ${
+                          user.role === 'administrator' 
+                            ? 'bg-gradient-to-br from-red-400 to-orange-500' 
+                            : 'bg-gradient-to-br from-indigo-400 to-purple-500'
+                        }`}>
+                          {user.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{user.name}</p>
+                          <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Role */}
+                    <div className="col-span-1 lg:col-span-2">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${roleInfo.color}`}>
+                        <RoleIcon className="w-3 h-3" />
+                        {roleInfo.label}
+                      </span>
+                    </div>
+
+                    {/* Department */}
+                    <div className="col-span-1 lg:col-span-2">
+                      <span className="text-gray-600">{user.department}</span>
+                    </div>
+
+                    {/* Assignments */}
+                    <div className="col-span-1 lg:col-span-2">
+                      {totalAssignments > 0 ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          {user.assignedBrokers.length > 0 && (
+                            <span className="flex items-center gap-1 text-purple-600">
+                              <Building2 className="w-3.5 h-3.5" />
+                              {user.assignedBrokers.length}
+                            </span>
+                          )}
+                          {user.assignedAgents.length > 0 && (
+                            <span className="flex items-center gap-1 text-blue-600">
+                              <UserCircle className="w-3.5 h-3.5" />
+                              {user.assignedAgents.length}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No assignments</span>
+                      )}
+                    </div>
+
+                    {/* Last Login */}
+                    <div className="col-span-1 lg:col-span-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${
+                          user.status === 'active' ? 'bg-green-500' : 'bg-gray-300'
+                        }`} />
+                        <span className="text-sm text-gray-500">{formatDate(user.lastLogin)}</span>
+                      </div>
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="col-span-1 lg:col-span-1 flex justify-end">
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </Link>
+                </motion.div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Total Users</p>
+          <p className="text-2xl font-bold text-gray-900">{mockUsers.length}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Administrators</p>
+          <p className="text-2xl font-bold text-red-600">
+            {mockUsers.filter(u => u.role === 'administrator').length}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Employees</p>
+          <p className="text-2xl font-bold text-blue-600">
+            {mockUsers.filter(u => u.role === 'employee').length}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Active</p>
+          <p className="text-2xl font-bold text-green-600">
+            {mockUsers.filter(u => u.status === 'active').length}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

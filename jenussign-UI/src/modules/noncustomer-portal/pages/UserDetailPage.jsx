@@ -1,76 +1,468 @@
-import React from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
-import { usersApi } from '../../../api/mockApi'
-import useAuthStore from '../../../stores/authStore'
+import React, { useState, useEffect } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import {
+  ArrowLeft,
+  User,
+  Mail,
+  Phone,
+  Shield,
+  Calendar,
+  Edit,
+  Save,
+  X,
+  Building2,
+  UserCircle,
+  Clock,
+  CheckCircle2,
+  Trash2,
+  Key,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+
+const mockUsers = {
+  'user-001': {
+    id: 'user-001',
+    name: 'Admin User',
+    email: 'admin@hydrainsurance.com.cy',
+    phone: '+357 22 100 100',
+    role: 'administrator',
+    department: 'IT',
+    status: 'active',
+    assignedBrokers: [],
+    assignedAgents: [],
+    lastLogin: '2025-01-17T10:00:00Z',
+    createdAt: '2020-01-01T00:00:00Z',
+  },
+  'emp-001': {
+    id: 'emp-001',
+    name: 'Elena Christodoulou',
+    email: 'elena.c@hydrainsurance.com.cy',
+    phone: '+357 99 555 666',
+    role: 'employee',
+    department: 'Sales',
+    status: 'active',
+    assignedBrokers: [{ id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' }],
+    assignedAgents: [{ id: 'agent-001', name: 'Maria Georgiou' }],
+    lastLogin: '2025-01-17T08:30:00Z',
+    createdAt: '2022-03-15T10:00:00Z',
+  },
+  'emp-002': {
+    id: 'emp-002',
+    name: 'Nikos Stavrou',
+    email: 'nikos.s@hydrainsurance.com.cy',
+    phone: '+357 99 777 888',
+    role: 'employee',
+    department: 'Underwriting',
+    status: 'active',
+    assignedBrokers: [{ id: 'broker-002', name: 'Mediterranean Insurance Services' }],
+    assignedAgents: [],
+    lastLogin: '2025-01-16T14:00:00Z',
+    createdAt: '2021-06-20T09:00:00Z',
+  },
+}
+
+const allBrokers = [
+  { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
+  { id: 'broker-002', name: 'Mediterranean Insurance Services' },
+  { id: 'broker-003', name: 'Island Risk Solutions' },
+]
+
+const allAgents = [
+  { id: 'agent-001', name: 'Maria Georgiou' },
+  { id: 'agent-002', name: 'Andreas Papadopoulos' },
+  { id: 'agent-003', name: 'Nikos Konstantinou' },
+]
+
+const departments = ['IT', 'Sales', 'Underwriting', 'Claims', 'Operations', 'Finance', 'HR']
 
 const UserDetailPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAdmin } = useAuthStore()
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [formData, setFormData] = useState({})
 
-  if (!isAdmin()) {
-    return <div className="p-6"><div className="bg-red-50 border border-red-200 rounded-lg p-4">
-      <p className="text-red-800">Access Denied</p></div></div>
+  useEffect(() => {
+    setTimeout(() => {
+      const data = mockUsers[id]
+      if (data) {
+        setUser(data)
+        setFormData({
+          ...data,
+          assignedBrokerIds: data.assignedBrokers.map(b => b.id),
+          assignedAgentIds: data.assignedAgents.map(a => a.id),
+        })
+      }
+      setLoading(false)
+    }, 500)
+  }, [id])
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData({ ...formData, [name]: value })
   }
 
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['user', id],
-    queryFn: () => usersApi.getUser(id),
-  })
+  const handleBrokerToggle = (brokerId) => {
+    const current = formData.assignedBrokerIds || []
+    if (current.includes(brokerId)) {
+      setFormData({ ...formData, assignedBrokerIds: current.filter(id => id !== brokerId) })
+    } else {
+      setFormData({ ...formData, assignedBrokerIds: [...current, brokerId] })
+    }
+  }
 
-  if (isLoading) return <div className="p-6">Loading...</div>
-  if (!user) return <div className="p-6">User not found</div>
+  const handleAgentToggle = (agentId) => {
+    const current = formData.assignedAgentIds || []
+    if (current.includes(agentId)) {
+      setFormData({ ...formData, assignedAgentIds: current.filter(id => id !== agentId) })
+    } else {
+      setFormData({ ...formData, assignedAgentIds: [...current, agentId] })
+    }
+  }
+
+  const handleSave = () => {
+    const updatedUser = {
+      ...formData,
+      assignedBrokers: allBrokers.filter(b => formData.assignedBrokerIds?.includes(b.id)),
+      assignedAgents: allAgents.filter(a => formData.assignedAgentIds?.includes(a.id)),
+    }
+    setUser(updatedUser)
+    setEditing(false)
+    toast.success('User updated successfully!')
+  }
+
+  const handleCancel = () => {
+    setFormData({
+      ...user,
+      assignedBrokerIds: user.assignedBrokers.map(b => b.id),
+      assignedAgentIds: user.assignedAgents.map(a => a.id),
+    })
+    setEditing(false)
+  }
+
+  const handleDelete = () => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      toast.success('User deleted successfully')
+      navigate('/portal/users')
+    }
+  }
+
+  const handleResetPassword = () => {
+    toast.success('Password reset email sent!')
+  }
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-GB', { 
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="text-center py-12">
+        <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">User Not Found</h2>
+        <Link to="/portal/users" className="text-indigo-600 hover:text-indigo-700">Back to Users</Link>
+      </div>
+    )
+  }
+
+  const isAdmin = user.role === 'administrator'
 
   return (
-    <div className="p-6">
-      <button onClick={() => navigate('/portal/users')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
-        <ArrowLeft size={20} /> Back to Users
-      </button>
-
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{user.displayName}</h1>
-        <div className="flex items-center gap-3 mt-2">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            {user.businessKey}
-          </span>
-          <span className="text-sm text-gray-500">{user.email}</span>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/portal/users')} className="p-2 rounded-xl hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${
+              isAdmin ? 'bg-gradient-to-br from-red-400 to-orange-500' : 'bg-gradient-to-br from-indigo-400 to-purple-500'
+            }`}>
+              {user.name.charAt(0)}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  isAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {isAdmin ? 'Administrator' : 'Employee'}
+                </span>
+              </div>
+              <p className="text-gray-500">{user.department}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {editing ? (
+            <>
+              <button onClick={handleCancel} className="px-4 py-2 text-gray-600 bg-gray-100 rounded-xl font-medium hover:bg-gray-200">
+                <X className="w-4 h-4 inline mr-2" />Cancel
+              </button>
+              <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700">
+                <Save className="w-4 h-4 inline mr-2" />Save
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setEditing(true)} className="px-4 py-2 text-indigo-600 bg-indigo-50 rounded-xl font-medium hover:bg-indigo-100">
+                <Edit className="w-4 h-4 inline mr-2" />Edit
+              </button>
+              <button onClick={handleResetPassword} className="px-4 py-2 text-amber-600 bg-amber-50 rounded-xl font-medium hover:bg-amber-100">
+                <Key className="w-4 h-4 inline mr-2" />Reset Password
+              </button>
+              <button onClick={handleDelete} className="px-4 py-2 text-red-600 bg-red-50 rounded-xl font-medium hover:bg-red-100">
+                <Trash2 className="w-4 h-4 inline mr-2" />Delete
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-semibold mb-4">User Information</h2>
-          <div className="space-y-3">
-            <div><span className="text-gray-600">Business Key:</span> <span className="ml-2 font-medium">{user.businessKey}</span></div>
-            <div><span className="text-gray-600">Email:</span> <span className="ml-2">{user.email}</span></div>
-            <div><span className="text-gray-600">Display Name:</span> <span className="ml-2">{user.displayName}</span></div>
-            <div><span className="text-gray-600">Role:</span> <span className={`ml-2 inline-flex px-2 py-1 rounded text-xs font-medium ${
-              user.role === 'Admin' ? 'bg-red-100 text-red-800' :
-              user.role === 'Broker' ? 'bg-orange-100 text-orange-800' :
-              user.role === 'Agent' ? 'bg-green-100 text-green-800' :
-              'bg-blue-100 text-blue-800'
-            }`}>{user.role}</span></div>
-            <div><span className="text-gray-600">Status:</span> <span className={`ml-2 inline-flex px-2 py-1 rounded text-xs font-medium ${
-              user.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-            }`}>{user.isActive ? 'Active' : 'Inactive'}</span></div>
-            {user.broker && (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* User Information */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">User Information</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <span className="text-gray-600">Broker:</span>
-                <div className="ml-2 mt-1 p-2 bg-orange-50 border border-orange-200 rounded">
-                  <div className="font-medium">{user.broker.displayName}</div>
-                  <div className="text-xs text-gray-500">{user.broker.businessKey}</div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Full Name</label>
+                {editing ? (
+                  <input type="text" name="name" value={formData.name} onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
+                ) : (
+                  <p className="text-gray-900 font-medium">{user.name}</p>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
+                {editing ? (
+                  <input type="email" name="email" value={formData.email} onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    <p className="text-gray-900">{user.email}</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Phone</label>
+                {editing ? (
+                  <input type="tel" name="phone" value={formData.phone} onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <p className="text-gray-900">{user.phone}</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Department</label>
+                {editing ? (
+                  <select name="department" value={formData.department} onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white">
+                    {departments.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-gray-900">{user.department}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Role</label>
+                {editing ? (
+                  <select name="role" value={formData.role} onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white">
+                    <option value="employee">Employee</option>
+                    <option value="administrator">Administrator</option>
+                  </select>
+                ) : (
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    isAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    <Shield className="w-3 h-3" />
+                    {isAdmin ? 'Administrator' : 'Employee'}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Status</label>
+                {editing ? (
+                  <select name="status" value={formData.status} onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                ) : (
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {user.status === 'active' && <CheckCircle2 className="w-3 h-3" />}
+                    {user.status}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Assignments (only for employees) */}
+          {!isAdmin && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Assignments</h2>
+                <p className="text-sm text-gray-500 mt-1">Brokers and agents this employee manages</p>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Assigned Brokers */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Assigned Brokers</label>
+                  {editing ? (
+                    <div className="space-y-2">
+                      {allBrokers.map(broker => (
+                        <label key={broker.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.assignedBrokerIds?.includes(broker.id)}
+                            onChange={() => handleBrokerToggle(broker.id)}
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                          />
+                          <span className="text-gray-900">{broker.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {user.assignedBrokers.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No brokers assigned</p>
+                      ) : (
+                        user.assignedBrokers.map(broker => (
+                          <Link key={broker.id} to={`/portal/brokers/${broker.id}`}
+                            className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
+                            <Building2 className="w-4 h-4 text-purple-500" />
+                            <span className="text-gray-900">{broker.name}</span>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Assigned Agents */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Assigned Agents</label>
+                  {editing ? (
+                    <div className="space-y-2">
+                      {allAgents.map(agent => (
+                        <label key={agent.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.assignedAgentIds?.includes(agent.id)}
+                            onChange={() => handleAgentToggle(agent.id)}
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                          />
+                          <span className="text-gray-900">{agent.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {user.assignedAgents.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No agents assigned</p>
+                      ) : (
+                        user.assignedAgents.map(agent => (
+                          <Link key={agent.id} to={`/portal/agents/${agent.id}`}
+                            className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
+                            <UserCircle className="w-4 h-4 text-blue-500" />
+                            <span className="text-gray-900">{agent.name}</span>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-semibold mb-4">Metadata</h2>
-          <div className="space-y-3 text-sm">
-            <div><span className="text-gray-600">Created:</span> <span className="ml-2">{new Date(user.createdAt).toLocaleString()}</span></div>
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Activity */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">Activity</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3 text-sm">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-500">Last Login:</span>
+                <span className="text-gray-900">{formatDate(user.lastLogin)}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-500">Created:</span>
+                <span className="text-gray-900">{formatDate(user.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Permissions */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">Permissions</h2>
+            </div>
+            <div className="p-6">
+              {isAdmin ? (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+                  <div className="flex items-center gap-2 text-red-700 font-medium">
+                    <Shield className="w-5 h-5" />
+                    Full System Access
+                  </div>
+                  <p className="text-sm text-red-600 mt-1">
+                    Can manage all users, brokers, agents, and system settings.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                    View assigned customers
+                  </div>
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Create and manage envelopes
+                  </div>
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                    View reports for assigned brokers/agents
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

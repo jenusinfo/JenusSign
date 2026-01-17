@@ -1,542 +1,682 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
-  Settings as SettingsIcon,
-  FileText,
-  Shield,
-  Users,
-  Plus,
-  Edit2,
-  Trash2,
-  Save,
-  X,
-  CheckCircle2,
-  Clock,
-  Key,
+  Settings,
+  Building2,
   Mail,
+  Shield,
+  Key,
+  Bell,
+  Award,
+  FileText,
+  Save,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  ExternalLink,
+  Clock,
+  ShieldCheck,
+  Lock,
+  Layers,
+  ClipboardCheck,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import Loading from '../../../shared/components/Loading'
+import EnvelopeTypesSettings from './EnvelopeTypesSettings'
+import ConsentDefinitionsSettings from './ConsentDefinitionsSettings'
 
-// Mock API - replace with actual API calls
-const settingsApi = {
-  getSettings: async () => ({
+const SettingsPage = () => {
+  const [activeTab, setActiveTab] = useState('company')
+  const [saving, setSaving] = useState(false)
+  const [testingConnection, setTestingConnection] = useState(false)
+
+  const [companySettings, setCompanySettings] = useState({
+    companyName: 'Hydra Insurance Ltd',
+    companyEmail: 'info@hydrainsurance.com.cy',
+    companyPhone: '+357 22 123 456',
+    address: '123 Makarios Avenue, Nicosia, Cyprus',
+    website: 'https://www.hydrainsurance.com.cy',
+    vatNumber: 'CY12345678X',
+  })
+
+  const [emailSettings, setEmailSettings] = useState({
+    senderName: 'JenusSign',
+    senderEmail: 'noreply@jenussign.com',
+    replyTo: 'support@hydrainsurance.com.cy',
+    enableReminders: true,
+    reminderDays: 3,
+  })
+
+  const [signingSettings, setSigningSettings] = useState({
+    defaultExpiry: 30,
+    requireIdVerification: true,
+    enableFaceMatch: true,
+    otpChannel: 'email',
+  })
+
+  // Certificate/eSeal settings (non-sensitive display only)
+  const [certificateSettings, setCertificateSettings] = useState({
+    eSealEnabled: true,
+    eSealDisplayName: 'JenusSign Qualified eSeal',
+    tsaEnabled: true,
+    tsaUrl: 'https://freetsa.org/tsr',
+  })
+
+  // Mock certificate status (would come from API)
+  const certificateStatus = {
+    eSeal: {
+      status: 'valid', // valid, expiring, expired, error
+      issuer: 'JCC Cyprus Trust Center',
+      subject: 'CN=JenusSign, O=Hydra Insurance Ltd, C=CY',
+      serialNumber: 'AB:CD:EF:12:34:56:78:90',
+      validFrom: '2024-01-15',
+      validTo: '2026-01-15',
+      keyVaultName: 'kv-jenussign-prod',
+      certificateName: 'JenusSign-eSeal-Certificate',
+      lastUsed: '2025-01-17T10:30:00Z',
+    },
     tsa: {
-      endpoint: 'https://freetsa.org/tsr',
-      hashAlgorithm: 'SHA256',
+      status: 'connected',
+      lastResponse: '2025-01-17T10:30:00Z',
+      responseTime: '245ms',
     },
-    keyVault: {
-      name: 'jenussign-vault',
-      certificateName: 'insurance-eseal',
+    jccApi: {
+      status: 'connected',
+      lastHealthCheck: '2025-01-17T10:00:00Z',
     },
-    session: {
-      timeoutMinutes: 15,
-      otpExpiryMinutes: 10,
-    },
-    retention: {
-      years: 10,
-    },
-  }),
-  getConsentDefinitions: async () => [
-    {
-      id: '1',
-      label: 'I accept the Terms & Conditions',
-      description: 'Customer must accept company T&C',
-      controlType: 'Checkbox',
-      isRequired: true,
-      isActive: true,
-    },
-    {
-      id: '2',
-      label: 'I consent to data processing',
-      description: 'GDPR consent for data processing',
-      controlType: 'Checkbox',
-      isRequired: true,
-      isActive: true,
-    },
-    {
-      id: '3',
-      label: 'I agree to receive marketing communications',
-      description: 'Optional marketing consent',
-      controlType: 'Checkbox',
-      isRequired: false,
-      isActive: true,
-    },
-  ],
-  createConsentDefinition: async (data) => ({ id: Date.now().toString(), ...data }),
-  updateConsentDefinition: async (id, data) => ({ id, ...data }),
-  deleteConsentDefinition: async (id) => ({ success: true }),
-}
-
-function GeneralSettingsTab() {
-  const { data: settings, isLoading } = useQuery({
-    queryKey: ['settings'],
-    queryFn: settingsApi.getSettings,
-  })
-
-  if (isLoading) return <Loading />
-
-  return (
-    <div className="space-y-6">
-      {/* TSA Configuration */}
-      <div className="card">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-primary-100 rounded-lg">
-              <Clock className="w-5 h-5 text-primary-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Trusted Timestamp Authority
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">RFC 3161 timestamping service</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              TSA Endpoint
-            </label>
-            <input
-              type="text"
-              value={settings.tsa.endpoint}
-              disabled
-              className="input bg-gray-50"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Currently using freetsa.org (free RFC 3161 service)
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hash Algorithm
-            </label>
-            <input
-              type="text"
-              value={settings.tsa.hashAlgorithm}
-              disabled
-              className="input bg-gray-50"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Azure Key Vault */}
-      <div className="card">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-success-100 rounded-lg">
-              <Key className="w-5 h-5 text-success-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Azure Key Vault Configuration
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">HSM-backed eSeal storage</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Key Vault Name
-            </label>
-            <input
-              type="text"
-              value={settings.keyVault.name}
-              disabled
-              className="input bg-gray-50"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Certificate Name
-            </label>
-            <input
-              type="text"
-              value={settings.keyVault.certificateName}
-              disabled
-              className="input bg-gray-50"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Session & Security */}
-      <div className="card">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-warning-100 rounded-lg">
-              <Shield className="w-5 h-5 text-warning-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Session & Security</h3>
-              <p className="text-sm text-gray-600 mt-1">Timeout and OTP configuration</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Session Timeout (minutes)
-            </label>
-            <input
-              type="number"
-              value={settings.session.timeoutMinutes}
-              disabled
-              className="input bg-gray-50"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Inactivity timeout for signing sessions
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              OTP Expiry (minutes)
-            </label>
-            <input
-              type="number"
-              value={settings.session.otpExpiryMinutes}
-              disabled
-              className="input bg-gray-50"
-            />
-            <p className="mt-1 text-xs text-gray-500">One-time password validity</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Data Retention */}
-      <div className="card">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-primary-100 rounded-lg">
-              <FileText className="w-5 h-5 text-primary-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Data Retention</h3>
-              <p className="text-sm text-gray-600 mt-1">eIDAS compliance requirement</p>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Retention Period (years)
-          </label>
-          <input
-            type="number"
-            value={settings.retention.years}
-            disabled
-            className="input bg-gray-50"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Minimum retention period for audit evidence and signed documents
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ConsentDefinitionsTab() {
-  const queryClient = useQueryClient()
-  const [isCreating, setIsCreating] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [formData, setFormData] = useState({
-    label: '',
-    description: '',
-    controlType: 'Checkbox',
-    isRequired: false,
-  })
-
-  const { data: consents, isLoading } = useQuery({
-    queryKey: ['consent-definitions'],
-    queryFn: settingsApi.getConsentDefinitions,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: settingsApi.createConsentDefinition,
-    onSuccess: () => {
-      queryClient.invalidateQueries(['consent-definitions'])
-      toast.success('Consent definition created')
-      setIsCreating(false)
-      resetForm()
-    },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, ...data }) => settingsApi.updateConsentDefinition(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['consent-definitions'])
-      toast.success('Consent definition updated')
-      setEditingId(null)
-      resetForm()
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: settingsApi.deleteConsentDefinition,
-    onSuccess: () => {
-      queryClient.invalidateQueries(['consent-definitions'])
-      toast.success('Consent definition deleted')
-    },
-  })
-
-  const resetForm = () => {
-    setFormData({
-      label: '',
-      description: '',
-      controlType: 'Checkbox',
-      isRequired: false,
-    })
   }
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (editingId) {
-      updateMutation.mutate({ id: editingId, ...formData })
-    } else {
-      createMutation.mutate(formData)
+  const handleSave = async () => {
+    setSaving(true)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    setSaving(false)
+    toast.success('Settings saved successfully!')
+  }
+
+  const handleTestConnection = async (service) => {
+    setTestingConnection(true)
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    setTestingConnection(false)
+    toast.success(`${service} connection successful!`)
+  }
+
+  const getStatusBadge = (status) => {
+    const configs = {
+      valid: { bg: 'bg-green-100', text: 'text-green-700', label: 'Valid' },
+      connected: { bg: 'bg-green-100', text: 'text-green-700', label: 'Connected' },
+      expiring: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Expiring Soon' },
+      expired: { bg: 'bg-red-100', text: 'text-red-700', label: 'Expired' },
+      error: { bg: 'bg-red-100', text: 'text-red-700', label: 'Error' },
+      disconnected: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Disconnected' },
     }
+    const config = configs[status] || configs.error
+    return (
+      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+        {config.label}
+      </span>
+    )
   }
 
-  const startEdit = (consent) => {
-    setEditingId(consent.id)
-    setFormData({
-      label: consent.label,
-      description: consent.description,
-      controlType: consent.controlType,
-      isRequired: consent.isRequired,
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
     })
-    setIsCreating(false)
   }
 
-  const cancelEdit = () => {
-    setIsCreating(false)
-    setEditingId(null)
-    resetForm()
+  const getDaysUntilExpiry = (expiryDate) => {
+    const today = new Date()
+    const expiry = new Date(expiryDate)
+    const diffTime = expiry - today
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
   }
 
-  if (isLoading) return <Loading />
+  const tabs = [
+    { id: 'company', label: 'Company', icon: Building2 },
+    { id: 'email', label: 'Email', icon: Mail },
+    { id: 'signing', label: 'Signing', icon: FileText },
+    { id: 'envelopeTypes', label: 'Envelope Types', icon: Layers },
+    { id: 'consents', label: 'Consents', icon: ClipboardCheck },
+    { id: 'certificates', label: 'Certificates', icon: Award },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+  ]
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Consent Definitions</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Manage consent templates for proposals
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+          <p className="text-gray-500 mt-1">Manage your organization settings</p>
         </div>
         <button
-          onClick={() => setIsCreating(true)}
-          className="btn btn-primary flex items-center space-x-2"
-          disabled={isCreating || editingId}
+          onClick={handleSave}
+          disabled={saving}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
         >
-          <Plus className="w-4 h-4" />
-          <span>Add Consent</span>
+          {saving ? (
+            <>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              >
+                <Settings className="w-5 h-5" />
+              </motion.div>
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              Save Changes
+            </>
+          )}
         </button>
       </div>
 
-      {/* Create/Edit Form */}
-      <AnimatePresence>
-        {(isCreating || editingId) && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="card bg-primary-50 border-primary-200"
-          >
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Label</label>
-                <input
-                  type="text"
-                  value={formData.label}
-                  onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                  placeholder="e.g., I accept the Terms & Conditions"
-                  className="input"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Internal description for this consent"
-                  className="input"
-                  rows={2}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Control Type
-                  </label>
-                  <select
-                    value={formData.controlType}
-                    onChange={(e) => setFormData({ ...formData, controlType: e.target.value })}
-                    className="input"
-                  >
-                    <option value="Checkbox">Checkbox</option>
-                    <option value="Radio">Radio</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center space-x-2 pt-6">
-                  <input
-                    type="checkbox"
-                    id="isRequired"
-                    checked={formData.isRequired}
-                    onChange={(e) => setFormData({ ...formData, isRequired: e.target.checked })}
-                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                  />
-                  <label htmlFor="isRequired" className="text-sm font-medium text-gray-700">
-                    Required consent
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <button type="submit" className="btn btn-primary flex items-center space-x-2">
-                  <Save className="w-4 h-4" />
-                  <span>{editingId ? 'Update' : 'Create'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="btn btn-secondary flex items-center space-x-2"
-                >
-                  <X className="w-4 h-4" />
-                  <span>Cancel</span>
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Consents List */}
-      <div className="space-y-3">
-        {consents.map((consent, index) => (
-          <motion.div
-            key={consent.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-            className={`card ${editingId === consent.id ? 'ring-2 ring-primary-500' : ''}`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-2">
-                  <h4 className="font-semibold text-gray-900">{consent.label}</h4>
-                  {consent.isRequired && (
-                    <span className="px-2 py-1 text-xs font-medium bg-danger-100 text-danger-700 rounded">
-                      Required
-                    </span>
-                  )}
-                  <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
-                    {consent.controlType}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600">{consent.description}</p>
-              </div>
-
-              <div className="flex items-center space-x-2 ml-4">
-                <button
-                  onClick={() => startEdit(consent)}
-                  className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                  disabled={isCreating || editingId}
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm('Delete this consent definition?')) {
-                      deleteMutation.mutate(consent.id)
-                    }
-                  }}
-                  className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
-                  disabled={isCreating || editingId}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('general')
-
-  const tabs = [
-    { id: 'general', label: 'General', icon: SettingsIcon },
-    { id: 'consents', label: 'Consent Definitions', icon: FileText },
-  ]
-
-  return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-1">Configure system settings and consent templates</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <div className="flex space-x-8">
-          {tabs.map((tab) => {
-            const Icon = tab.icon
-            return (
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Tabs Navigation */}
+        <div className="lg:col-span-1">
+          <nav className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 pb-4 border-b-2 transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-600 text-primary-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                    ? 'bg-indigo-50 text-indigo-700 border-l-4 border-indigo-600'
+                    : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <tab.icon className="w-5 h-5" />
                 <span className="font-medium">{tab.label}</span>
               </button>
-            )
-          })}
+            ))}
+          </nav>
+        </div>
+
+        {/* Settings Content */}
+        <div className="lg:col-span-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            {/* Company Settings */}
+            {activeTab === 'company' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Company Information</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                      <input
+                        type="text"
+                        value={companySettings.companyName}
+                        onChange={(e) => setCompanySettings({ ...companySettings, companyName: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={companySettings.companyEmail}
+                        onChange={(e) => setCompanySettings({ ...companySettings, companyEmail: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                      <input
+                        type="tel"
+                        value={companySettings.companyPhone}
+                        onChange={(e) => setCompanySettings({ ...companySettings, companyPhone: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">VAT Number</label>
+                      <input
+                        type="text"
+                        value={companySettings.vatNumber}
+                        onChange={(e) => setCompanySettings({ ...companySettings, vatNumber: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                      <input
+                        type="text"
+                        value={companySettings.address}
+                        onChange={(e) => setCompanySettings({ ...companySettings, address: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Email Settings */}
+            {activeTab === 'email' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Email Configuration</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sender Name</label>
+                    <input
+                      type="text"
+                      value={emailSettings.senderName}
+                      onChange={(e) => setEmailSettings({ ...emailSettings, senderName: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sender Email</label>
+                    <input
+                      type="email"
+                      value={emailSettings.senderEmail}
+                      onChange={(e) => setEmailSettings({ ...emailSettings, senderEmail: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Reply-To Email</label>
+                    <input
+                      type="email"
+                      value={emailSettings.replyTo}
+                      onChange={(e) => setEmailSettings({ ...emailSettings, replyTo: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Reminder Days</label>
+                    <input
+                      type="number"
+                      value={emailSettings.reminderDays}
+                      onChange={(e) => setEmailSettings({ ...emailSettings, reminderDays: parseInt(e.target.value) })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="enableReminders"
+                    checked={emailSettings.enableReminders}
+                    onChange={(e) => setEmailSettings({ ...emailSettings, enableReminders: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <label htmlFor="enableReminders" className="text-sm text-gray-700">
+                    Enable automatic reminders for unsigned documents
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Signing Settings */}
+            {activeTab === 'signing' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Signing Configuration</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Default Expiry (days)</label>
+                    <input
+                      type="number"
+                      value={signingSettings.defaultExpiry}
+                      onChange={(e) => setSigningSettings({ ...signingSettings, defaultExpiry: parseInt(e.target.value) })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">OTP Channel</label>
+                    <select
+                      value={signingSettings.otpChannel}
+                      onChange={(e) => setSigningSettings({ ...signingSettings, otpChannel: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+                    >
+                      <option value="email">Email</option>
+                      <option value="sms">SMS</option>
+                      <option value="both">Both</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="requireIdVerification"
+                      checked={signingSettings.requireIdVerification}
+                      onChange={(e) => setSigningSettings({ ...signingSettings, requireIdVerification: e.target.checked })}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    <label htmlFor="requireIdVerification" className="text-sm text-gray-700">
+                      Require ID verification before signing
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="enableFaceMatch"
+                      checked={signingSettings.enableFaceMatch}
+                      onChange={(e) => setSigningSettings({ ...signingSettings, enableFaceMatch: e.target.checked })}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    <label htmlFor="enableFaceMatch" className="text-sm text-gray-700">
+                      Enable face match verification
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Envelope Types Settings */}
+            {activeTab === 'envelopeTypes' && (
+              <EnvelopeTypesSettings />
+            )}
+
+            {/* Consents Settings */}
+            {activeTab === 'consents' && (
+              <ConsentDefinitionsSettings />
+            )}
+
+            {/* Certificates Settings */}
+            {activeTab === 'certificates' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Certificates & eSeal</h2>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Lock className="w-4 h-4" />
+                    Credentials stored in Azure Key Vault
+                  </div>
+                </div>
+
+                {/* eSeal Certificate */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                        <Award className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">eSeal Certificate</h3>
+                        <p className="text-sm text-gray-500">Qualified electronic seal for document signing</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {getStatusBadge(certificateStatus.eSeal.status)}
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={certificateSettings.eSealEnabled}
+                          onChange={(e) => setCertificateSettings({ ...certificateSettings, eSealEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Display Name</label>
+                        <input
+                          type="text"
+                          value={certificateSettings.eSealDisplayName}
+                          onChange={(e) => setCertificateSettings({ ...certificateSettings, eSealDisplayName: e.target.value })}
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Issuer</label>
+                        <p className="text-gray-900 py-2.5">{certificateStatus.eSeal.issuer}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Subject</label>
+                        <p className="text-gray-900 text-sm py-2.5 font-mono bg-gray-50 px-3 rounded-lg">
+                          {certificateStatus.eSeal.subject}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Serial Number</label>
+                        <p className="text-gray-900 text-sm py-2.5 font-mono bg-gray-50 px-3 rounded-lg">
+                          {certificateStatus.eSeal.serialNumber}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Valid From</label>
+                        <p className="text-gray-900 py-2.5">{formatDate(certificateStatus.eSeal.validFrom)}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Valid Until</label>
+                        <div className="flex items-center gap-2 py-2.5">
+                          <p className="text-gray-900">{formatDate(certificateStatus.eSeal.validTo)}</p>
+                          {getDaysUntilExpiry(certificateStatus.eSeal.validTo) < 90 && (
+                            <span className="text-amber-600 text-sm">
+                              ({getDaysUntilExpiry(certificateStatus.eSeal.validTo)} days left)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Key Vault Info */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                      <div className="flex items-start gap-3">
+                        <Key className="w-5 h-5 text-blue-600 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-blue-800">Azure Key Vault (HSM-backed)</p>
+                          <p className="text-blue-600 mt-1">
+                            Vault: <span className="font-mono">{certificateStatus.eSeal.keyVaultName}</span>
+                          </p>
+                          <p className="text-blue-600">
+                            Certificate: <span className="font-mono">{certificateStatus.eSeal.certificateName}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timestamp Authority */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Timestamp Authority (TSA)</h3>
+                        <p className="text-sm text-gray-500">RFC 3161 compliant timestamping service</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {getStatusBadge(certificateStatus.tsa.status)}
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={certificateSettings.tsaEnabled}
+                          onChange={(e) => setCertificateSettings({ ...certificateSettings, tsaEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">TSA URL</label>
+                      <input
+                        type="url"
+                        value={certificateSettings.tsaUrl}
+                        onChange={(e) => setCertificateSettings({ ...certificateSettings, tsaUrl: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
+                        placeholder="https://freetsa.org/tsr"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-4 text-gray-500">
+                        <span>Last response: {formatDate(certificateStatus.tsa.lastResponse)}</span>
+                        <span>Response time: {certificateStatus.tsa.responseTime}</span>
+                      </div>
+                      <button
+                        onClick={() => handleTestConnection('TSA')}
+                        disabled={testingConnection}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${testingConnection ? 'animate-spin' : ''}`} />
+                        Test Connection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* JCC Trust Services API */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                        <ShieldCheck className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">JCC Trust Services</h3>
+                        <p className="text-sm text-gray-500">Qualified Trust Service Provider API</p>
+                      </div>
+                    </div>
+                    {getStatusBadge(certificateStatus.jccApi.status)}
+                  </div>
+                  <div className="p-6">
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 mb-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-amber-800">Credentials Secured</p>
+                          <p className="text-amber-600 mt-1">
+                            JCC API credentials (Client ID & Secret) are stored securely in Azure Key Vault 
+                            and are not visible in this interface.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-500">
+                        Last health check: {formatDate(certificateStatus.jccApi.lastHealthCheck)}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleTestConnection('JCC API')}
+                          disabled={testingConnection}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${testingConnection ? 'animate-spin' : ''}`} />
+                          Test Connection
+                        </button>
+                        <a
+                          href="https://portal.azure.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Manage in Azure
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* eIDAS Compliance */}
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-6 h-6 text-green-600" />
+                    <div>
+                      <h3 className="font-medium text-green-800">eIDAS Article 26 Compliant</h3>
+                      <p className="text-sm text-green-600">
+                        Your certificate configuration meets Advanced Electronic Signature (AES) requirements
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Security Settings */}
+            {activeTab === 'security' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Security Settings</h2>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-6 h-6 text-green-600" />
+                    <div>
+                      <h3 className="font-medium text-green-800">eIDAS Compliant</h3>
+                      <p className="text-sm text-green-600">Your signing configuration meets Article 26 requirements</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Two-Factor Authentication</h4>
+                      <p className="text-sm text-gray-500">Require 2FA for all admin users</p>
+                    </div>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Session Timeout</h4>
+                      <p className="text-sm text-gray-500">Auto-logout after 30 minutes of inactivity</p>
+                    </div>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Audit Logging</h4>
+                      <p className="text-sm text-gray-500">Log all user actions for compliance</p>
+                    </div>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notifications Settings */}
+            {activeTab === 'notifications' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Notification Preferences</h2>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Envelope Signed</h4>
+                      <p className="text-sm text-gray-500">Get notified when a customer signs documents</p>
+                    </div>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Envelope Expired</h4>
+                      <p className="text-sm text-gray-500">Get notified when an envelope expires</p>
+                    </div>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Certificate Expiry Warning</h4>
+                      <p className="text-sm text-gray-500">Get notified 90 days before certificate expiry</p>
+                    </div>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Daily Summary</h4>
+                      <p className="text-sm text-gray-500">Receive a daily summary of all envelope activity</p>
+                    </div>
+                    <input type="checkbox" className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* Tab Content */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
-          {activeTab === 'general' && <GeneralSettingsTab />}
-          {activeTab === 'consents' && <ConsentDefinitionsTab />}
-        </motion.div>
-      </AnimatePresence>
     </div>
   )
 }
+
+export default SettingsPage

@@ -4,19 +4,34 @@ import {
   Download,
   ExternalLink,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Maximize2,
 } from 'lucide-react'
 
 /**
- * MobileFriendlyPdfViewer - A PDF viewer that works on both desktop and mobile
- * Uses native browser PDF rendering with fallbacks for mobile
+ * MobileFriendlyPdfViewer - Unified PDF viewer for both portals
+ * 
+ * Features:
+ * - Native browser PDF rendering with fallbacks
+ * - Google Docs Viewer fallback for mobile
+ * - Loading states and error handling
+ * - Download and fullscreen options
+ * 
+ * Props:
+ * - src: PDF URL
+ * - title: Document title
+ * - height: Viewer height (default: '500px')
+ * - showDownload: Show download button
+ * - showFullscreen: Show fullscreen button
+ * - className: Additional classes
  */
 export default function MobileFriendlyPdfViewer({ 
   src, 
   title = 'Document',
   className = '',
   showDownload = true,
-  height = '500px'
+  showFullscreen = true,
+  height = '500px',
 }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -43,17 +58,19 @@ export default function MobileFriendlyPdfViewer({
     setError(true)
   }
 
-  // For mobile, we'll use Google Docs Viewer which reliably renders PDFs
-  // For local/demo PDFs, we use the native viewer with object tag fallback
-  const isExternalUrl = src.startsWith('http://') || src.startsWith('https://')
+  // Check if external URL
+  const isExternalUrl = src?.startsWith('http://') || src?.startsWith('https://')
   
-  // Google Docs Viewer URL (works for external URLs)
+  // Google Docs Viewer URL (works for external URLs on mobile)
   const googleViewerUrl = isExternalUrl 
     ? `https://docs.google.com/viewer?url=${encodeURIComponent(src)}&embedded=true`
     : null
 
-  // For demo/local PDFs, construct absolute URL
+  // For local PDFs, construct absolute URL
   const absoluteSrc = isExternalUrl ? src : `${window.location.origin}${src}`
+
+  // PDF parameters for better viewing
+  const pdfParams = '#toolbar=1&navpanes=0&scrollbar=1&view=FitH'
 
   return (
     <div className={`bg-gray-100 rounded-xl border border-gray-200 overflow-hidden ${className}`}>
@@ -64,21 +81,23 @@ export default function MobileFriendlyPdfViewer({
           <span className="text-sm font-medium text-gray-700 truncate">{title}</span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <a
-            href={src}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
-            title="Open in new tab"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Open</span>
-          </a>
+          {showFullscreen && (
+            <a
+              href={src}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              title="Open in new tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Open</span>
+            </a>
+          )}
           {showDownload && (
             <a
               href={src}
               download
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
               title="Download PDF"
             >
               <Download className="w-3.5 h-3.5" />
@@ -107,42 +126,56 @@ export default function MobileFriendlyPdfViewer({
             <p className="text-gray-500 text-sm mb-4 text-center">
               Your browser may not support embedded PDF viewing
             </p>
-            <a
-              href={src}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Open PDF in New Tab
-            </a>
+            <div className="flex gap-2">
+              <a
+                href={src}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open PDF
+              </a>
+              {showDownload && (
+                <a
+                  href={src}
+                  download
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </a>
+              )}
+            </div>
           </div>
         ) : (
           <>
-            {/* Primary: Use object tag which has better mobile support */}
+            {/* Primary: Use object tag which has better cross-browser support */}
             <object
-              data={`${src}#toolbar=1&navpanes=0&scrollbar=1&view=FitH`}
+              data={`${src}${pdfParams}`}
               type="application/pdf"
               className="w-full h-full"
               style={{ display: error ? 'none' : 'block' }}
               onLoad={handleLoad}
               onError={handleError}
             >
-              {/* Fallback 1: iframe */}
+              {/* Fallback 1: iframe with Google Docs viewer on mobile */}
               <iframe
-                src={`${src}#toolbar=1&navpanes=0&scrollbar=1&view=FitH`}
+                src={isMobile && googleViewerUrl ? googleViewerUrl : `${src}${pdfParams}`}
                 title={title}
                 className="w-full h-full border-0"
                 onLoad={handleLoad}
                 onError={handleError}
               >
                 {/* Fallback 2: Direct link */}
-                <p className="p-4 text-center">
-                  Your browser does not support PDF viewing.{' '}
-                  <a href={src} className="text-blue-600 hover:underline">
+                <div className="p-4 text-center">
+                  <p className="text-gray-600 mb-2">
+                    Your browser does not support PDF viewing.
+                  </p>
+                  <a href={src} className="text-blue-600 hover:underline font-medium">
                     Download the PDF
                   </a>
-                </p>
+                </div>
               </iframe>
             </object>
           </>

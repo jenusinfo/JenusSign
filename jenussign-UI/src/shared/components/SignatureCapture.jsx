@@ -1,13 +1,15 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  FileText,
+  Pen,
   Upload,
   Type,
   Check,
   X,
   RefreshCw,
 } from 'lucide-react'
+
+import { componentPresets } from '../constants/designSystem'
 
 /**
  * SignatureCapture Component
@@ -17,11 +19,13 @@ import {
  * - Type: Type name and select from script fonts
  * - Upload: Upload signature image file
  * 
+ * Used in both Customer Portal and Agent Portal.
+ * 
  * Props:
- * - onSignatureChange: Callback with { hasSignature: boolean, dataUrl: string|null, method: 'draw'|'type'|'upload' }
- * - defaultName: Pre-fill name for typed signature (e.g., from verification)
+ * - onSignatureChange: Callback with { hasSignature, dataUrl, method }
+ * - defaultName: Pre-fill name for typed signature
  * - width: Canvas width (default: 600)
- * - height: Canvas height (default: 220)
+ * - height: Canvas height (default: 200)
  * - disabled: Disable all interactions
  */
 
@@ -53,7 +57,7 @@ export default function SignatureCapture({
   onSignatureChange,
   defaultName = '',
   width = 600,
-  height = 220,
+  height = 200,
   disabled = false,
 }) {
   // Tab state
@@ -150,7 +154,6 @@ export default function SignatureCapture({
       const ctx = canvas.getContext('2d')
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const hasContent = imageData.data.some((pixel, index) => {
-        // Check non-alpha channels for non-background color
         if (index % 4 === 3) return false // Skip alpha
         const bgValue = index % 4 === 0 ? 249 : index % 4 === 1 ? 250 : 251 // #f9fafb
         return Math.abs(pixel - bgValue) > 10
@@ -222,11 +225,26 @@ export default function SignatureCapture({
     const file = e.target.files?.[0]
     if (!file) return
     
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file')
+      return
+    }
+    
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB')
+      return
+    }
+    
     setUploadedFile(file)
+    
+    // Create preview
     const reader = new FileReader()
     reader.onload = (event) => {
-      setUploadPreview(event.target.result)
-      notifyChange(true, event.target.result, 'upload')
+      const dataUrl = event.target?.result
+      setUploadPreview(dataUrl)
+      notifyChange(true, dataUrl, 'upload')
     }
     reader.readAsDataURL(file)
   }
@@ -240,26 +258,9 @@ export default function SignatureCapture({
     notifyChange(false, null, 'upload')
   }
 
-  // ============ TAB CHANGE ============
-  
-  const handleTabChange = (tab) => {
-    setActiveTab(tab)
-    
-    // Notify parent about current signature state for new tab
-    if (tab === 'draw') {
-      notifyChange(hasDrawing, hasDrawing ? canvasRef.current?.toDataURL('image/png') : null, 'draw')
-    } else if (tab === 'type') {
-      const hasTyped = typedName.trim().length > 0
-      notifyChange(hasTyped, hasTyped ? renderTypedSignature() : null, 'type')
-    } else if (tab === 'upload') {
-      notifyChange(!!uploadPreview, uploadPreview, 'upload')
-    }
-  }
-
-  // ============ RENDER ============
-  
+  // Tab configuration
   const tabs = [
-    { id: 'draw', label: 'Draw', icon: FileText },
+    { id: 'draw', label: 'Draw', icon: Pen },
     { id: 'type', label: 'Type', icon: Type },
     { id: 'upload', label: 'Upload', icon: Upload },
   ]
@@ -268,26 +269,28 @@ export default function SignatureCapture({
     <div className="space-y-4">
       {/* Tab Buttons */}
       <div className="flex gap-2">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => handleTabChange(id)}
-            disabled={disabled}
-            className={`
-              flex-1 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 
-              rounded-lg text-sm font-medium border transition-all
-              ${activeTab === id
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-              }
-              ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
-          >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{label}</span>
-          </button>
-        ))}
+        {tabs.map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              disabled={disabled}
+              className={`
+                flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium border transition-all
+                ${activeTab === tab.id
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/25'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }
+                ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Tab Content */}
@@ -334,7 +337,7 @@ export default function SignatureCapture({
             </div>
             
             <div className="mt-2 flex flex-col sm:flex-row justify-between gap-2 text-xs text-gray-500">
-              <span>Use your mouse or finger (on touch devices) to draw your signature.</span>
+              <span>Use your mouse or finger to draw your signature</span>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
@@ -343,16 +346,6 @@ export default function SignatureCapture({
                   className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium disabled:opacity-50"
                 >
                   Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleClearCanvas()
-                  }}
-                  disabled={disabled}
-                  className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium disabled:opacity-50"
-                >
-                  Cancel
                 </button>
               </div>
             </div>
@@ -380,7 +373,7 @@ export default function SignatureCapture({
                 onChange={(e) => setTypedName(e.target.value)}
                 placeholder="Enter your name..."
                 disabled={disabled}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:opacity-50 disabled:bg-gray-100"
+                className={componentPresets.input.base}
                 maxLength={50}
               />
             </div>

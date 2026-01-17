@@ -5,29 +5,20 @@ import {
   User,
   Mail,
   Phone,
-  MapPin,
   CreditCard,
-  Calendar,
-  Save,
-  UserCircle,
   Building2,
+  Save,
+  Award,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// Mock data for dropdowns
-const mockAgents = [
-  { id: 'agent-001', name: 'Maria Georgiou', broker: 'Cyprus Insurance Brokers' },
-  { id: 'agent-002', name: 'Andreas Papadopoulos', broker: 'Mediterranean Insurance' },
-  { id: 'agent-003', name: 'Nikos Konstantinou', broker: 'Cyprus Insurance Brokers' },
+const mockBrokers = [
+  { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
+  { id: 'broker-002', name: 'Mediterranean Insurance Services' },
+  { id: 'broker-003', name: 'Island Risk Solutions' },
 ]
 
-const mockEmployees = [
-  { id: 'emp-001', name: 'Elena Christodoulou', department: 'Sales' },
-  { id: 'emp-002', name: 'Nikos Stavrou', department: 'Underwriting' },
-  { id: 'emp-003', name: 'Anna Kyriacou', department: 'Claims' },
-]
-
-const CustomerCreatePage = () => {
+const AgentCreatePage = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -35,13 +26,8 @@ const CustomerCreatePage = () => {
     email: '',
     phone: '',
     idNumber: '',
-    dateOfBirth: '',
-    address: '',
-    city: '',
-    postalCode: '',
-    country: 'Cyprus',
-    assignedAgentId: '',
-    assignedEmployeeId: '',
+    licenseNumber: '',
+    brokerId: '',
     notes: '',
   })
 
@@ -53,38 +39,32 @@ const CustomerCreatePage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!formData.name || !formData.email || !formData.idNumber || !formData.assignedAgentId) {
+    if (!formData.name || !formData.email || !formData.idNumber || !formData.brokerId) {
       toast.error('Please fill in all required fields')
       return
     }
 
     setLoading(true)
-    
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000))
     
-    toast.success('Customer created successfully!')
-    navigate('/portal/customers')
+    toast.success('Agent created successfully!')
+    navigate('/portal/agents')
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate('/portal/customers')}
-          className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
-        >
+        <button onClick={() => navigate('/portal/agents')} className="p-2 rounded-xl hover:bg-gray-100">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add New Customer</h1>
-          <p className="text-gray-500">Create a new customer record</p>
+          <h1 className="text-2xl font-bold text-gray-900">Add New Agent</h1>
+          <p className="text-gray-500">Create a new insurance agent</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
           {/* Personal Information */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -104,15 +84,15 @@ const CustomerCreatePage = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Enter agent's full name"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                   required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ID Number <span className="text-red-500">*</span>
+                  Agent ID <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -121,7 +101,7 @@ const CustomerCreatePage = () => {
                     name="idNumber"
                     value={formData.idNumber}
                     onChange={handleChange}
-                    placeholder="e.g., X1234567"
+                    placeholder="e.g., AG001"
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                     required
                   />
@@ -129,14 +109,15 @@ const CustomerCreatePage = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">License Number</label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Award className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
-                    type="date"
-                    name="dateOfBirth"
-                    value={formData.dateOfBirth}
+                    type="text"
+                    name="licenseNumber"
+                    value={formData.licenseNumber}
                     onChange={handleChange}
+                    placeholder="e.g., CY-INS-2024-1234"
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -164,7 +145,7 @@ const CustomerCreatePage = () => {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    placeholder="customer@example.com"
+                    placeholder="agent@example.com"
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                     required
                   />
@@ -185,96 +166,35 @@ const CustomerCreatePage = () => {
                   />
                 </div>
               </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    placeholder="Street address"
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.city}
-                  onChange={handleChange}
-                  placeholder="Nicosia"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
-                <input
-                  type="text"
-                  name="postalCode"
-                  value={formData.postalCode}
-                  onChange={handleChange}
-                  placeholder="1065"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
             </div>
           </div>
 
-          {/* Assignment */}
+          {/* Broker Assignment */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                <UserCircle className="w-5 h-5 text-gray-400" />
-                Assignment
+                <Building2 className="w-5 h-5 text-gray-400" />
+                Broker Assignment
               </h2>
             </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned Agent <span className="text-red-500">*</span>
+                  Assigned Broker <span className="text-red-500">*</span>
                 </label>
                 <select
-                  name="assignedAgentId"
-                  value={formData.assignedAgentId}
+                  name="brokerId"
+                  value={formData.brokerId}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                   required
                 >
-                  <option value="">Select an agent...</option>
-                  {mockAgents.map(agent => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name} ({agent.broker})
-                    </option>
+                  <option value="">Select a broker...</option>
+                  {mockBrokers.map(broker => (
+                    <option key={broker.id} value={broker.id}>{broker.name}</option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">Required: The agent managing this customer</p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned Employee (Optional)
-                </label>
-                <select
-                  name="assignedEmployeeId"
-                  value={formData.assignedEmployeeId}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
-                >
-                  <option value="">None (Broker business only)</option>
-                  {mockEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.department})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Optional: For direct insurance business</p>
+                <p className="text-xs text-gray-500 mt-1">The broker company this agent works for</p>
               </div>
             </div>
           </div>
@@ -290,7 +210,7 @@ const CustomerCreatePage = () => {
                 value={formData.notes}
                 onChange={handleChange}
                 rows={3}
-                placeholder="Any additional notes about this customer..."
+                placeholder="Any additional notes about this agent..."
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -299,14 +219,13 @@ const CustomerCreatePage = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Summary */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden sticky top-6">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900">Summary</h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <p className="text-sm text-gray-500">Customer Name</p>
+                <p className="text-sm text-gray-500">Agent Name</p>
                 <p className="font-medium text-gray-900">{formData.name || '—'}</p>
               </div>
               <div>
@@ -314,9 +233,9 @@ const CustomerCreatePage = () => {
                 <p className="font-medium text-gray-900">{formData.email || '—'}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Assigned Agent</p>
+                <p className="text-sm text-gray-500">Broker</p>
                 <p className="font-medium text-gray-900">
-                  {mockAgents.find(a => a.id === formData.assignedAgentId)?.name || '—'}
+                  {mockBrokers.find(b => b.id === formData.brokerId)?.name || '—'}
                 </p>
               </div>
             </div>
@@ -324,7 +243,7 @@ const CustomerCreatePage = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
               >
                 {loading ? (
                   <>
@@ -334,14 +253,11 @@ const CustomerCreatePage = () => {
                 ) : (
                   <>
                     <Save className="w-5 h-5" />
-                    Create Customer
+                    Create Agent
                   </>
                 )}
               </button>
-              <Link
-                to="/portal/customers"
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-gray-600 mt-2 hover:text-gray-900"
-              >
+              <Link to="/portal/agents" className="w-full flex items-center justify-center px-4 py-2.5 text-gray-600 mt-2 hover:text-gray-900">
                 Cancel
               </Link>
             </div>
@@ -352,4 +268,4 @@ const CustomerCreatePage = () => {
   )
 }
 
-export default CustomerCreatePage
+export default AgentCreatePage

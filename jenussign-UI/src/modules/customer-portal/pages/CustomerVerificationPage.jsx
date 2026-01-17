@@ -1,1630 +1,1139 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import React, { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
 import {
-  ArrowLeft,
   Shield,
   User,
-  Building2,
-  Calendar,
-  IdCard,
-  Mail,
-  Phone,
-  KeyRound,
+  CreditCard,
   Camera,
   Upload,
-  CheckCircle2,
-  Lock,
-  ShieldCheck,
-  Zap,
-  Scan,
-  CreditCard,
-  AlertCircle,
-  X,
-  RefreshCw,
+  Mail,
   Smartphone,
-  Monitor,
-  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  ArrowLeft,
+  Loader2,
+  Eye,
+  EyeOff,
+  FileText,
+  Lock,
+  Globe,
+  Scan,
+  RefreshCw,
+  X,
   Check,
-  ChevronRight,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Logo from '../../../shared/components/Logo'
+import useAuthStore from '../../../shared/store/authStore'
 
-import { signingSessionsApi } from '../../../api/mockApi'
-import useAuthStore from '../../../stores/authStore'
-import Loading from '../../../shared/components/Loading'
-import { formatDate } from '../../../shared/utils/formatters'
+// Verification method options
+const VERIFICATION_METHODS = {
+  MANUAL: 'manual',
+  CY_LOGIN: 'cy_login',
+  OCR_SCAN: 'ocr_scan',
+}
 
-// Custom styles for react-datepicker
-const datePickerStyles = `
-  .react-datepicker {
-    font-family: inherit;
-    border-radius: 12px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-  }
-  .react-datepicker__header {
-    background: linear-gradient(to right, #4f46e5, #6366f1);
-    border-bottom: none;
-    border-radius: 12px 12px 0 0;
-    padding-top: 12px;
-  }
-  .react-datepicker__current-month,
-  .react-datepicker__day-name {
-    color: white;
-  }
-  .react-datepicker__month-dropdown-container,
-  .react-datepicker__year-dropdown-container {
-    margin: 0 4px;
-  }
-  .react-datepicker__month-select,
-  .react-datepicker__year-select {
-    padding: 4px 8px;
-    border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.3);
-    background: rgba(255,255,255,0.2);
-    color: white;
-    font-weight: 500;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  .react-datepicker__month-select:focus,
-  .react-datepicker__year-select:focus {
-    outline: none;
-    border-color: white;
-  }
-  .react-datepicker__month-select option,
-  .react-datepicker__year-select option {
-    color: #1f2937;
-    background: white;
-  }
-  .react-datepicker__day--selected,
-  .react-datepicker__day--keyboard-selected {
-    background-color: #4f46e5 !important;
-    border-radius: 8px;
-  }
-  .react-datepicker__day:hover {
-    background-color: #e0e7ff;
-    border-radius: 8px;
-  }
-  .react-datepicker__navigation {
-    top: 12px;
-  }
-  .react-datepicker__navigation-icon::before {
-    border-color: white;
-  }
-  .react-datepicker-popper {
-    z-index: 50;
-  }
-  @media (max-width: 640px) {
-    .react-datepicker {
-      width: 100%;
-    }
-    .react-datepicker__month-container {
-      width: 100%;
-    }
-    .react-datepicker__month-select,
-    .react-datepicker__year-select {
-      font-size: 16px;
-      padding: 6px 10px;
-    }
-  }
-`
+// Verification steps
+const STEPS = {
+  LOADING: 'loading',
+  SELECT_METHOD: 'select_method',
+  IDENTITY_VERIFICATION: 'identity_verification',
+  CONTACT_VERIFICATION: 'contact_verification',
+  VERIFIED: 'verified',
+  ERROR: 'error',
+}
 
 const CustomerVerificationPage = () => {
-  const { token } = useParams()
+  const { token } = useParams()  // Token from URL path
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { setCustomerAuth } = useAuthStore()
 
-  const [step, setStep] = useState('identity') // 'identity' | 'contact' | 'otp'
-  const [verificationMethod, setVerificationMethod] = useState(null) // null | 'eid' | 'idscan' | 'manual'
-  const [eidDialogOpen, setEidDialogOpen] = useState(false)
+  // State
+  const [currentStep, setCurrentStep] = useState(STEPS.LOADING)
+  const [verificationMethod, setVerificationMethod] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  // ID Scanning state
-  const [idFrontImage, setIdFrontImage] = useState(null)
-  const [idBackImage, setIdBackImage] = useState(null)
-  const [selfieImage, setSelfieImage] = useState(null)
-  const [extractedData, setExtractedData] = useState(null)
-  const [scanningStep, setScanningStep] = useState('front') // 'front' | 'back' | 'selfie' | 'processing' | 'complete'
-  const [isProcessing, setIsProcessing] = useState(false)
+  // Envelope data (would come from API)
+  const [envelopeData, setEnvelopeData] = useState(null)
+  const [envelopeId, setEnvelopeId] = useState(null)  // Internal ID from token lookup
 
-  // Camera state
-  const [cameraActive, setCameraActive] = useState(false)
-  const [captureMode, setCaptureMode] = useState('upload') // 'upload' | 'camera'
-  const [cameraError, setCameraError] = useState(null)
-  const [isMobile, setIsMobile] = useState(false)
-  const [cameraReady, setCameraReady] = useState(false)
-
-  // Separate refs for each file input to avoid conflicts
-  const frontFileInputRef = useRef(null)
-  const backFileInputRef = useRef(null)
-  const selfieFileInputRef = useRef(null)
-  const videoRef = useRef(null)
-  const canvasRef = useRef(null)
-  const streamRef = useRef(null)
-
-  const [form, setForm] = useState({
-    dateOfBirth: '',
+  // Identity verification state
+  const [identityVerified, setIdentityVerified] = useState(false)
+  const [manualFormData, setManualFormData] = useState({
+    firstName: '',
+    lastName: '',
     idNumber: '',
-    dateOfRegistration: '',
-    registrationNumber: '',
-    tin: '',
-    email: '',
-    mobile: '',
-    channel: 'EMAIL',
-    otp: '',
+    dateOfBirth: '',
   })
 
-  // Detect mobile device
+  // OCR state
+  const [ocrStep, setOcrStep] = useState('select') // select, capture, processing, confirm
+  const [capturedImage, setCapturedImage] = useState(null)
+  const [ocrResult, setOcrResult] = useState(null)
+  const fileInputRef = useRef(null)
+  const videoRef = useRef(null)
+  const [cameraActive, setCameraActive] = useState(false)
+
+  // Contact verification state
+  const [contactMethod, setContactMethod] = useState('email') // email or sms
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpCode, setOtpCode] = useState(['', '', '', '', '', ''])
+  const [otpResendTimer, setOtpResendTimer] = useState(0)
+  const otpInputRefs = useRef([])
+
+  // Customer data from token/API
+  const [customerData, setCustomerData] = useState({
+    firstName: 'Yiannis',
+    lastName: 'Kleanthous',
+    email: 'yiannis.k●●●●●@email.com',
+    emailFull: 'yiannis.kleanthous@email.com',
+    phone: '+357 99 ●●● 456',
+    phoneFull: '+35799123456',
+    idNumberLast4: '4567',
+    dateOfBirth: '1985-03-12',
+  })
+
+  // Load envelope data on mount
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
-    }
-    checkMobile()
-  }, [])
+    loadEnvelopeData()
+  }, [token])
 
-  // Inject custom datepicker styles
+  // OTP resend timer
   useEffect(() => {
-    const styleId = 'datepicker-custom-styles'
-    if (!document.getElementById(styleId)) {
-      const styleSheet = document.createElement('style')
-      styleSheet.id = styleId
-      styleSheet.textContent = datePickerStyles
-      document.head.appendChild(styleSheet)
+    if (otpResendTimer > 0) {
+      const timer = setTimeout(() => setOtpResendTimer(otpResendTimer - 1), 1000)
+      return () => clearTimeout(timer)
     }
-    return () => {
-      const existingStyle = document.getElementById(styleId)
-      if (existingStyle) {
-        existingStyle.remove()
-      }
-    }
-  }, [])
+  }, [otpResendTimer])
 
-  // 1. Load signing session (from token)
-  const { data: session, isLoading } = useQuery({
-    queryKey: ['signing-session', token],
-    queryFn: () => signingSessionsApi.getSessionByToken(token),
-  })
-
-  const isIndividual = session?.customerType === 'INDIVIDUAL'
-
-  // 2. Identity verification mutation (manual path)
-  const identityMutation = useMutation({
-    mutationFn: (payload) => signingSessionsApi.verifyIdentity(token, payload),
-    onSuccess: (res) => {
-      if (!res.success) {
-        toast.error('The details do not match our records. Please check and try again.')
-        return
-      }
-      toast.success('Identity verified')
-      setStep('contact')
-    },
-    onError: () => {
-      toast.error('Could not verify identity. Please try again later.')
-    },
-  })
-
-  // 3. Send OTP mutation
-  const sendOtpMutation = useMutation({
-    mutationFn: (payload) => signingSessionsApi.sendOtp(token, payload),
-    onSuccess: () => {
-      toast.success('We have sent you a 6-digit code.')
-      setStep('otp')
-    },
-    onError: () => {
-      toast.error('Could not send code. Please try again.')
-    },
-  })
-
-  // 4. Verify OTP mutation
-  const verifyOtpMutation = useMutation({
-    mutationFn: (payload) => signingSessionsApi.verifyOtp(token, payload),
-    onSuccess: (res) => {
-      if (!res.success) {
-        toast.error('The code is not correct. Please try again.')
-        return
-      }
-      const emailToUse = form.email || session.prefilledEmail
-      setCustomerAuth(`customer-token-${Date.now()}`, { email: emailToUse })
-
-      // ✅ Store verification state in sessionStorage for session-based memory
-      // This allows users to navigate away and return without re-verifying
-      sessionStorage.setItem(`verified_${session.proposalId}`, JSON.stringify({
-        idVerified: true,
-        contactVerified: true,
-        method: verificationMethod || 'manual',
-        timestamp: Date.now(),
-        email: emailToUse
-      }))
-
-      toast.success('Contact verified. Loading your proposal…')
-      navigate(`/customer/proposals/${session.proposalId}/sign`)
-    },
-    onError: () => {
-      toast.error('Could not verify code. Please try again.')
-    },
-  })
-
-  // ===== Camera Functions =====
-
-  const startCamera = useCallback(async (forSelfie = false) => {
+  const loadEnvelopeData = async () => {
+    setIsLoading(true)
     try {
-      setCameraError(null)
-      setCameraReady(false)
+      // Simulate API call - in production, validate token and get envelope
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
-      // Stop any existing stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-        streamRef.current = null
+      // Mock token to envelope mapping (simulates API lookup)
+      const tokenToEnvelope = {
+        'demo1': {
+          id: 'env-001',
+          reference: 'PR-2025-0001',
+          title: 'Home Insurance Proposal',
+          status: 'pending',
+          documentCount: 3,
+          expiresAt: '2026-02-17T00:00:00Z',
+          customer: {
+            name: 'Yiannis Kleanthous',
+            email: 'yiannis.kleanthous@email.com',
+          },
+          agent: {
+            name: 'Maria Georgiou',
+            company: 'Hydra Insurance Ltd',
+          },
+        },
+        'demo2': {
+          id: 'env-002',
+          reference: 'PR-2025-0002',
+          title: 'Motor Insurance Proposal',
+          status: 'pending',
+          documentCount: 3,
+          expiresAt: '2026-02-17T00:00:00Z',
+          customer: {
+            name: 'Charis Constantinou',
+            email: 'charis.constantinou@email.com',
+          },
+          agent: {
+            name: 'Andreas Papadopoulos',
+            company: 'Hydra Insurance Ltd',
+          },
+        },
       }
 
-      const constraints = {
-        video: {
-          facingMode: forSelfie ? 'user' : 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
+      const envelope = tokenToEnvelope[token]
+      
+      if (!envelope) {
+        throw new Error('Invalid or expired link')
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      streamRef.current = stream
+      // Store envelope ID from token lookup
+      setEnvelopeId(envelope.id)
+      setEnvelopeData(envelope)
 
-      // Small delay to ensure video element is mounted
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // Update customer data based on envelope
+      if (envelope.id === 'env-002') {
+        setCustomerData({
+          firstName: 'Charis',
+          lastName: 'Constantinou',
+          email: 'charis.c●●●●●@email.com',
+          emailFull: 'charis.constantinou@email.com',
+          phone: '+357 99 ●●● 321',
+          phoneFull: '+35799654321',
+          idNumberLast4: '4321',
+          dateOfBirth: '1990-07-22',
+        })
+      }
 
+      // Check if user is already verified (e.g., from session)
+      const isAlreadyVerified = sessionStorage.getItem(`verified_${token}`)
+      
+      if (isAlreadyVerified) {
+        // Already verified, go directly to signing
+        navigate(`/customer/sign/${token}`)
+        return
+      }
+
+      setCurrentStep(STEPS.SELECT_METHOD)
+    } catch (err) {
+      setError('Failed to load envelope. The link may be invalid or expired.')
+      setCurrentStep(STEPS.ERROR)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // ============================================
+  // IDENTITY VERIFICATION HANDLERS
+  // ============================================
+
+  const handleManualVerification = async () => {
+    if (!manualFormData.firstName || !manualFormData.lastName || !manualFormData.idNumber || !manualFormData.dateOfBirth) {
+      toast.error('Please fill in all fields')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      // Simulate verification check
+      const idMatches = manualFormData.idNumber.endsWith(customerData.idNumberLast4)
+      const dobMatches = manualFormData.dateOfBirth === customerData.dateOfBirth
+
+      if (idMatches && dobMatches) {
+        setIdentityVerified(true)
+        setCurrentStep(STEPS.CONTACT_VERIFICATION)
+        toast.success('Identity verified successfully')
+      } else {
+        toast.error('The information provided does not match our records. Please try again.')
+      }
+    } catch (err) {
+      toast.error('Verification failed. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCyLogin = async () => {
+    setIsLoading(true)
+    try {
+      // In production, this would redirect to Cyprus government eID portal
+      // For demo, simulate the flow
+      toast.success('Redirecting to CY Login...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Simulate successful CY Login return
+      setIdentityVerified(true)
+      setCurrentStep(STEPS.CONTACT_VERIFICATION)
+      toast.success('CY Login verification successful')
+    } catch (err) {
+      toast.error('CY Login verification failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleOcrCapture = async (imageData) => {
+    setCapturedImage(imageData)
+    setOcrStep('processing')
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2500))
+
+      // Simulate OCR result
+      setOcrResult({
+        firstName: 'Yiannis',
+        lastName: 'Kleanthous',
+        idNumber: 'X1234567',
+        dateOfBirth: '1985-03-12',
+        documentType: 'National ID Card',
+        expiryDate: '2028-05-15',
+        confidence: 98.5,
+      })
+      setOcrStep('confirm')
+    } catch (err) {
+      toast.error('Failed to process document. Please try again.')
+      setOcrStep('select')
+    }
+  }
+
+  const confirmOcrResult = async () => {
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      setIdentityVerified(true)
+      setCurrentStep(STEPS.CONTACT_VERIFICATION)
+      toast.success('Identity verified via document scan')
+    } catch (err) {
+      toast.error('Verification failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      })
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.setAttribute('playsinline', 'true')
-        videoRef.current.setAttribute('autoplay', 'true')
-        videoRef.current.muted = true
-
-        // Wait for video to be ready
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play()
-            .then(() => {
-              setCameraReady(true)
-              setCameraActive(true)
-            })
-            .catch(err => {
-              console.error('Video play error:', err)
-              setCameraError('Could not start video playback')
-            })
-        }
-      } else {
-        // Video ref not ready yet, try again after a short delay
-        setTimeout(() => {
-          if (videoRef.current && streamRef.current) {
-            videoRef.current.srcObject = streamRef.current
-            videoRef.current.play().catch(console.error)
-            setCameraReady(true)
-            setCameraActive(true)
-          }
-        }, 200)
+        setCameraActive(true)
       }
-
-      toast.success(`Camera activated (${forSelfie ? 'front' : 'rear'})`)
     } catch (err) {
-      console.error('Camera error:', err)
-      setCameraError(err.message || 'Could not access camera')
-      setCaptureMode('upload')
-
-      if (err.name === 'NotAllowedError') {
-        toast.error('Camera permission denied. Please allow camera access or use upload mode.')
-      } else if (err.name === 'NotFoundError') {
-        toast.error('No camera found. Please use upload mode.')
-      } else {
-        toast.error('Could not access camera. Please use upload mode.')
-      }
+      toast.error('Unable to access camera. Please upload an image instead.')
     }
-  }, [])
+  }
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop())
+      setCameraActive(false)
     }
+  }
+
+  const captureFromCamera = () => {
     if (videoRef.current) {
-      videoRef.current.srcObject = null
+      const canvas = document.createElement('canvas')
+      canvas.width = videoRef.current.videoWidth
+      canvas.height = videoRef.current.videoHeight
+      canvas.getContext('2d').drawImage(videoRef.current, 0, 0)
+      const imageData = canvas.toDataURL('image/jpeg')
+      stopCamera()
+      handleOcrCapture(imageData)
     }
-    setCameraActive(false)
-    setCameraReady(false)
-  }, [])
+  }
 
-  const capturePhoto = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return null
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const context = canvas.getContext('2d')
-
-    canvas.width = video.videoWidth || 1280
-    canvas.height = video.videoHeight || 720
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-    return canvas.toDataURL('image/jpeg', 0.9)
-  }, [])
-
-  // FIX: Don't reset captureMode to 'upload' after capturing
-  // Keep the camera mode so subsequent steps also use camera
-  const handleCameraCapture = useCallback((type) => {
-    const imageData = capturePhoto()
-    if (!imageData) {
-      toast.error('Could not capture image')
-      return
-    }
-
-    // Stop camera after capture but keep captureMode as 'camera'
-    stopCamera()
-
-    if (type === 'front') {
-      setIdFrontImage(imageData)
-      toast.success('Front ID captured!')
-    } else if (type === 'back') {
-      setIdBackImage(imageData)
-      toast.success('Back ID captured!')
-    } else if (type === 'selfie') {
-      setSelfieImage(imageData)
-      toast.success('Selfie captured!')
-    }
-    // Note: We intentionally do NOT set setCaptureMode('upload') here
-    // so that the next step continues with camera mode
-  }, [capturePhoto, stopCamera])
-
-  const handleFileSelect = (e, type) => {
+  const handleFileUpload = (e) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        handleOcrCapture(event.target.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const imageData = event.target.result
-      if (type === 'front') {
-        setIdFrontImage(imageData)
-        toast.success('Front ID uploaded!')
-      } else if (type === 'back') {
-        setIdBackImage(imageData)
-        toast.success('Back ID uploaded!')
-      } else if (type === 'selfie') {
-        setSelfieImage(imageData)
-        toast.success('Selfie uploaded!')
+  // ============================================
+  // CONTACT VERIFICATION HANDLERS
+  // ============================================
+
+  const sendOtp = async () => {
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      setOtpSent(true)
+      setOtpResendTimer(60)
+      toast.success(`OTP sent to ${contactMethod === 'email' ? customerData.email : customerData.phone}`)
+    } catch (err) {
+      toast.error('Failed to send OTP')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleOtpChange = (index, value) => {
+    if (value.length > 1) {
+      // Handle paste
+      const digits = value.replace(/\D/g, '').slice(0, 6).split('')
+      const newOtp = [...otpCode]
+      digits.forEach((digit, i) => {
+        if (index + i < 6) newOtp[index + i] = digit
+      })
+      setOtpCode(newOtp)
+      const nextIndex = Math.min(index + digits.length, 5)
+      otpInputRefs.current[nextIndex]?.focus()
+    } else {
+      const newOtp = [...otpCode]
+      newOtp[index] = value.replace(/\D/g, '')
+      setOtpCode(newOtp)
+      if (value && index < 5) {
+        otpInputRefs.current[index + 1]?.focus()
       }
     }
-    reader.readAsDataURL(file)
-
-    // Reset the input so the same file can be selected again if needed
-    e.target.value = ''
   }
 
-  const retakePhoto = (type) => {
-    if (type === 'front') setIdFrontImage(null)
-    else if (type === 'back') setIdBackImage(null)
-    else if (type === 'selfie') setSelfieImage(null)
-
-    // If in camera mode, restart the camera for retake
-    if (captureMode === 'camera') {
-      const forSelfie = type === 'selfie'
-      startCamera(forSelfie)
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otpCode[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus()
     }
   }
 
-  const toggleCaptureMode = useCallback((mode, forSelfie = false) => {
-    if (mode === 'camera') {
-      setCaptureMode('camera')
-      startCamera(forSelfie)
-    } else {
-      setCaptureMode('upload')
-      stopCamera()
-    }
-  }, [startCamera, stopCamera])
-
-  // Handle advancing to next step - maintain camera mode if applicable
-  const advanceToNextStep = useCallback((nextStep, forSelfie = false) => {
-    setScanningStep(nextStep)
-    // If we're in camera mode, start the camera for the next step
-    if (captureMode === 'camera') {
-      // Small delay to ensure the DOM updates with the new step's video element
-      setTimeout(() => {
-        startCamera(forSelfie)
-      }, 100)
-    }
-  }, [captureMode, startCamera])
-
-  // Cleanup camera on unmount
-  useEffect(() => {
-    return () => {
-      stopCamera()
-    }
-  }, [stopCamera])
-
-  // Process ID images (simulated OCR)
-  const processIdImages = async () => {
-    setIsProcessing(true)
-    setScanningStep('processing')
-
-    // Simulated OCR processing
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    // Simulated extracted data - use session data when available
-    const mockExtractedData = {
-      fullName: session?.customerName || 'ANDREAS CONSTANTINOU',
-      idNumber: session?.eidData?.idNumber || session?.expectedIdNumber || ('K' + Math.floor(100000 + Math.random() * 900000)),
-      dateOfBirth: session?.expectedDateOfBirth || '1985-03-12',
-      nationality: 'CYP',
-      expiryDate: '2028-03-15',
-      faceMatchScore: 98.5,
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    setExtractedData(mockExtractedData)
-    setForm(prev => ({
-      ...prev,
-      dateOfBirth: mockExtractedData.dateOfBirth,
-      idNumber: mockExtractedData.idNumber,
-    }))
-
-    setScanningStep('complete')
-    setIsProcessing(false)
-    toast.success('Identity verified successfully!')
-  }
-
-  // Auto-process when all images captured
-  useEffect(() => {
-    if (idFrontImage && idBackImage && selfieImage && scanningStep === 'selfie') {
-      processIdImages()
-    }
-  }, [selfieImage])
-
-  // Continue after ID scan complete
-  const handleIdScanComplete = () => {
-    setStep('contact')
-  }
-
-  // ----- Handlers -----
-
-  const handleChange = (field) => (e) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }))
-  }
-
-  const handleIdentitySubmit = (e) => {
-    e.preventDefault()
-    if (!session) return
-
-    if (isIndividual) {
-      identityMutation.mutate({
-        customerType: 'INDIVIDUAL',
-        dateOfBirth: form.dateOfBirth,
-        idNumber: form.idNumber,
-      })
-    } else {
-      identityMutation.mutate({
-        customerType: 'BUSINESS',
-        dateOfRegistration: form.dateOfRegistration,
-        registrationNumber: form.registrationNumber,
-        tin: form.tin,
-      })
-    }
-  }
-
-  const handleSendOtp = (e) => {
-    e.preventDefault()
-    if (!session) return
-
-    const email = form.email || session.prefilledEmail
-    const mobile = form.mobile || session.prefilledMobile
-
-    if (!email) {
-      toast.error('Please provide an email address')
-      return
-    }
-    if (isIndividual && form.channel === 'SMS' && !mobile) {
-      toast.error('Please provide a mobile number for SMS')
+  const verifyOtp = async () => {
+    const code = otpCode.join('')
+    if (code.length !== 6) {
+      toast.error('Please enter the complete 6-digit code')
       return
     }
 
-    sendOtpMutation.mutate({
-      channel: isIndividual ? form.channel : 'EMAIL',
-      email,
-      mobile,
-    })
-  }
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
-  const handleVerifyOtp = (e) => {
-    e.preventDefault()
-    if (!form.otp) {
-      toast.error('Please enter the 6-digit code')
-      return
+      // For demo, accept any 6-digit code or specific test code
+      if (code === '123456' || code.length === 6) {
+        // Store verification in session (keyed by token)
+        sessionStorage.setItem(`verified_${token}`, 'true')
+        sessionStorage.setItem(`verification_method_${token}`, verificationMethod)
+        sessionStorage.setItem(`envelope_id_${token}`, envelopeId)  // Store internal ID
+        
+        // Also log the customer into the portal so they can access dashboard
+        const customerAuthData = {
+          id: envelopeId,
+          name: envelopeData?.customer?.name || customerData.firstName + ' ' + customerData.lastName,
+          email: customerData.emailFull || envelopeData?.customer?.email,
+          phone: customerData.phoneFull,
+          verifiedAt: new Date().toISOString(),
+          verificationMethod: verificationMethod,
+        }
+        setCustomerAuth(`customer_${token}`, customerAuthData)
+        
+        setCurrentStep(STEPS.VERIFIED)
+        toast.success('Verification complete!')
+
+        // Redirect to signing after short delay (using token in URL)
+        setTimeout(() => {
+          navigate(`/customer/sign/${token}`)
+        }, 2000)
+      } else {
+        toast.error('Invalid OTP. Please try again.')
+      }
+    } catch (err) {
+      toast.error('Verification failed')
+    } finally {
+      setIsLoading(false)
     }
-    verifyOtpMutation.mutate({ otp: form.otp })
   }
 
-  // ----- eID demo flow -----
-  const openEidDialog = () => {
-    setEidDialogOpen(true)
-  }
+  // ============================================
+  // RENDER METHODS
+  // ============================================
 
-  const handleEidDemoCancel = () => {
-    setEidDialogOpen(false)
-  }
-
-  const handleEidDemoConfirm = () => {
-    if (!session) return
-
-    setVerificationMethod('eid')
-
-    const eidPayload = {
-      fullName: session.customerName || 'Cyprus eID Demo User',
-      nationalId: session.eidData?.idNumber || session.expectedIdNumber || 'X1234567',
-      dateOfBirth: session.expectedDateOfBirth || '1985-03-12',
-      email: session.prefilledEmail || 'eid.user@example.com',
-      mobile: session.prefilledMobile || '+357 99 123456',
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      dateOfBirth: eidPayload.dateOfBirth,
-      idNumber: eidPayload.nationalId,
-      email: eidPayload.email || prev.email,
-      mobile: eidPayload.mobile || prev.mobile,
-      channel: eidPayload.mobile ? 'SMS' : 'EMAIL',
-    }))
-
-    toast.success('Verified via Cyprus eID (demo). Please confirm your contact details.')
-    setStep('contact')
-    setEidDialogOpen(false)
-  }
-
-  // ----- Render -----
-
-  if (isLoading || !session) {
-    return <Loading fullScreen message="Loading your secure signing session." />
-  }
-
-  // Verification method selection cards
-  const VerificationMethodSelection = () => (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-600 mb-4">
-        Choose how you'd like to verify your identity:
-      </p>
-
-      {/* 1. Manual ID Entry Option */}
-      <button
-        onClick={() => setVerificationMethod('manual')}
-        className="w-full p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all text-left group"
-      >
-        <div className="flex items-start gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center flex-shrink-0">
-            <User className="w-6 h-6 text-white" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900">Manual ID Entry</span>
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-gray-200 text-gray-700 rounded-full">MANUAL</span>
-            </div>
-            <p className="text-xs text-gray-600 mt-1">
-              {isIndividual
-                ? 'Provide your birth date and ID number manually'
-                : 'Enter company registration details'}
-            </p>
-            <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
-              <IdCard className="w-3 h-3" />
-              <span>Quick and simple • No camera needed</span>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
-        </div>
-      </button>
-
-      {/* 2. Cyprus eID Verification Option */}
-      <button
-        onClick={openEidDialog}
-        className="w-full p-4 rounded-xl border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 hover:border-blue-400 hover:shadow-md transition-all text-left group"
-      >
-        <div className="flex items-start gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
-            <Shield className="w-6 h-6 text-white" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900">Cyprus eID Verification</span>
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full">AUTOMATIC</span>
-            </div>
-            <p className="text-xs text-gray-600 mt-1">
-              Instant verification using your government digital ID
-            </p>
-            <div className="flex items-center gap-1 mt-2 text-xs text-blue-600">
-              <ShieldCheck className="w-3 h-3" />
-              <span>Secure • Full audit trail • eIDAS compliant</span>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
-        </div>
-      </button>
-
-      {/* 3. ID Scan & Selfie Option */}
-      {isIndividual && (
-        <button
-          onClick={() => setVerificationMethod('idscan')}
-          className="w-full p-4 rounded-xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 hover:border-purple-400 hover:shadow-md transition-all text-left group"
-        >
-          <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0">
-              <Scan className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-900">ID Scan & Selfie</span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 rounded-full">SMART SCAN</span>
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                Take photos of your ID card + a selfie for automatic verification
-              </p>
-              <div className="flex items-center gap-1 mt-2 text-xs text-purple-600">
-                <Camera className="w-3 h-3" />
-                <span>Camera or upload • Data auto-extracted</span>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" />
-          </div>
-        </button>
-      )}
+  const renderLoading = () => (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
+        <p className="text-gray-600">Loading your documents...</p>
+      </div>
     </div>
   )
 
-  // ID Scanning UI
-  const IdScanningUI = () => (
-    <div className="space-y-4">
-      {/* Progress indicator */}
-      <div className="flex items-center justify-center gap-2 mb-6">
-        {['front', 'back', 'selfie'].map((s, idx) => (
-          <React.Fragment key={s}>
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${scanningStep === s ? 'bg-purple-600 text-white' :
-              (scanningStep === 'processing' || scanningStep === 'complete' ||
-                (s === 'front' && idFrontImage) ||
-                (s === 'back' && idBackImage) ||
-                (s === 'selfie' && selfieImage))
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-200 text-gray-500'
-              }`}>
-              {(s === 'front' && idFrontImage) || (s === 'back' && idBackImage) || (s === 'selfie' && selfieImage) || scanningStep === 'processing' || scanningStep === 'complete'
-                ? <Check className="w-4 h-4" />
-                : idx + 1}
-            </div>
-            {idx < 2 && <div className={`w-12 h-1 rounded ${(s === 'front' && idFrontImage) || (s === 'back' && idBackImage) ? 'bg-green-500' : 'bg-gray-200'
-              }`} />}
-          </React.Fragment>
-        ))}
+  const renderError = () => (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertCircle className="w-8 h-8 text-red-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h2>
+        <p className="text-gray-600 mb-6">{error}</p>
+        <button
+          onClick={loadEnvelopeData}
+          className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    </div>
+  )
+
+  const renderSelectMethod = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="text-center">
+        <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Shield className="w-8 h-8 text-indigo-600" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Verify Your Identity</h1>
+        <p className="text-gray-600">
+          Before you can view and sign your documents, we need to verify your identity.
+        </p>
       </div>
 
-      {/* Hidden canvas for capturing */}
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* Front ID Step */}
-      {scanningStep === 'front' && (
-        <div className="text-center">
-          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CreditCard className="w-8 h-8 text-purple-600" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Scan Front of ID Card
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Take a photo of the front of your Cyprus ID card
-          </p>
-
-          {/* Mode Toggle */}
-          <div className="flex justify-center gap-2 mb-4">
-            <button
-              onClick={() => toggleCaptureMode('upload')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-            >
-              <Upload className="w-4 h-4 inline mr-2" />
-              Upload
-            </button>
-            <button
-              onClick={() => toggleCaptureMode('camera', false)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-            >
-              <Camera className="w-4 h-4 inline mr-2" />
-              Camera
-            </button>
-          </div>
-
-          {!idFrontImage ? (
-            <>
-              {captureMode === 'upload' ? (
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  {/* FIX: Removed capture attribute to allow file picker on mobile */}
-                  <input
-                    ref={frontFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileSelect(e, 'front')}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => frontFileInputRef.current?.click()}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-                  >
-                    Choose Photo
-                  </button>
-                  <p className="text-xs text-gray-500 mt-3">
-                    Select an existing photo from your device
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="relative w-full max-w-md mx-auto aspect-[16/10] bg-gray-900 rounded-xl overflow-hidden">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                      style={{ transform: 'scaleX(1)' }}
-                    />
-                    {/* Loading indicator while camera initializes */}
-                    {!cameraReady && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80">
-                        <div className="text-center">
-                          <RefreshCw className="w-8 h-8 text-white animate-spin mx-auto mb-2" />
-                          <p className="text-white text-sm">Starting camera...</p>
-                        </div>
-                      </div>
-                    )}
-                    {/* ID Card overlay guide */}
-                    <div className="absolute inset-4 border-2 border-white/50 rounded-lg pointer-events-none">
-                      <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-white" />
-                      <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-white" />
-                      <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-white" />
-                      <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-white" />
-                    </div>
-                    <div className="absolute bottom-4 left-0 right-0 text-center text-white text-sm">
-                      Position ID card within the frame
-                    </div>
-                  </div>
-                  {cameraError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-                      <AlertCircle className="w-4 h-4 inline mr-2" />
-                      {cameraError}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => handleCameraCapture('front')}
-                    disabled={!cameraReady}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Camera className="w-4 h-4 inline mr-2" />
-                    Capture Photo
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="space-y-4">
-              <img src={idFrontImage} alt="Front ID" className="w-full max-w-md mx-auto rounded-xl border-2 border-green-300" />
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => retakePhoto('front')}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  <X className="w-4 h-4 inline mr-2" />
-                  Retake
-                </button>
-                <button
-                  onClick={() => advanceToNextStep('back', false)}
-                  className="px-6 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700"
-                >
-                  Continue
-                  <ChevronRight className="w-4 h-4 inline ml-2" />
-                </button>
-              </div>
+      {/* Envelope Info */}
+      {envelopeData && (
+        <div className="bg-indigo-50 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <FileText className="w-5 h-5 text-indigo-600 mt-0.5" />
+            <div>
+              <p className="font-medium text-indigo-900">{envelopeData.title}</p>
+              <p className="text-sm text-indigo-600">
+                Reference: {envelopeData.reference} • {envelopeData.documentCount} documents
+              </p>
+              <p className="text-sm text-indigo-600 mt-1">
+                From: {envelopeData.agent.name}, {envelopeData.agent.company}
+              </p>
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {/* Back ID Step */}
-      {scanningStep === 'back' && (
-        <div className="text-center">
-          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CreditCard className="w-8 h-8 text-purple-600" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Scan Back of ID Card
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Now take a photo of the back of your ID card
-          </p>
+      {/* Verification Methods */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-gray-700">Choose verification method:</p>
 
-          {/* Mode Toggle */}
-          <div className="flex justify-center gap-2 mb-4">
-            <button
-              onClick={() => toggleCaptureMode('upload')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-            >
-              <Upload className="w-4 h-4 inline mr-2" />
-              Upload
-            </button>
-            <button
-              onClick={() => toggleCaptureMode('camera', false)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-            >
-              <Camera className="w-4 h-4 inline mr-2" />
-              Camera
-            </button>
+        {/* Manual Verification */}
+        <button
+          onClick={() => {
+            setVerificationMethod(VERIFICATION_METHODS.MANUAL)
+            setCurrentStep(STEPS.IDENTITY_VERIFICATION)
+          }}
+          className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-left group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+              <User className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900">Manual Verification</h3>
+              <p className="text-sm text-gray-500">Enter your personal details to verify</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
           </div>
+        </button>
 
-          {!idBackImage ? (
+        {/* CY Login */}
+        <button
+          onClick={() => {
+            setVerificationMethod(VERIFICATION_METHODS.CY_LOGIN)
+            setCurrentStep(STEPS.IDENTITY_VERIFICATION)
+          }}
+          className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-left group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
+              <Globe className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900">CY Login</h3>
+              <p className="text-sm text-gray-500">Use your Cyprus government eID</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
+          </div>
+        </button>
+
+        {/* OCR Scan */}
+        <button
+          onClick={() => {
+            setVerificationMethod(VERIFICATION_METHODS.OCR_SCAN)
+            setCurrentStep(STEPS.IDENTITY_VERIFICATION)
+          }}
+          className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-left group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+              <CreditCard className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900">Scan ID Document</h3>
+              <p className="text-sm text-gray-500">Scan your National ID or Passport</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
+          </div>
+        </button>
+      </div>
+
+      {/* Security Notice */}
+      <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
+        <Lock className="w-5 h-5 text-gray-400 mt-0.5" />
+        <div className="text-sm text-gray-600">
+          <p className="font-medium text-gray-700">Your data is secure</p>
+          <p>All verification is encrypted and compliant with eIDAS and GDPR regulations.</p>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderManualVerification = () => (
+    <div className="space-y-6">
+      <button
+        onClick={() => setCurrentStep(STEPS.SELECT_METHOD)}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to options
+      </button>
+
+      <div className="text-center">
+        <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <User className="w-8 h-8 text-blue-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Manual Verification</h2>
+        <p className="text-gray-600">Enter your details exactly as they appear in our records</p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+            <input
+              type="text"
+              value={manualFormData.firstName}
+              onChange={(e) => setManualFormData({ ...manualFormData, firstName: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter first name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+            <input
+              type="text"
+              value={manualFormData.lastName}
+              onChange={(e) => setManualFormData({ ...manualFormData, lastName: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter last name"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">ID Number</label>
+          <input
+            type="text"
+            value={manualFormData.idNumber}
+            onChange={(e) => setManualFormData({ ...manualFormData, idNumber: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder="Enter your ID number"
+          />
+          <p className="text-xs text-gray-500 mt-1">National ID or Passport number</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+          <input
+            type="date"
+            value={manualFormData.dateOfBirth}
+            onChange={(e) => setManualFormData({ ...manualFormData, dateOfBirth: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+        </div>
+
+        <button
+          onClick={handleManualVerification}
+          disabled={isLoading}
+          className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
             <>
-              {captureMode === 'upload' ? (
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  {/* FIX: Removed capture attribute to allow file picker on mobile */}
-                  <input
-                    ref={backFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileSelect(e, 'back')}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => backFileInputRef.current?.click()}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-                  >
-                    Choose Photo
-                  </button>
-                  <p className="text-xs text-gray-500 mt-3">
-                    Select an existing photo from your device
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="relative w-full max-w-md mx-auto aspect-[16/10] bg-gray-900 rounded-xl overflow-hidden">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                    />
-                    {/* Loading indicator while camera initializes */}
-                    {!cameraReady && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80">
-                        <div className="text-center">
-                          <RefreshCw className="w-8 h-8 text-white animate-spin mx-auto mb-2" />
-                          <p className="text-white text-sm">Starting camera...</p>
-                        </div>
-                      </div>
-                    )}
-                    <div className="absolute inset-4 border-2 border-white/50 rounded-lg pointer-events-none">
-                      <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-white" />
-                      <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-white" />
-                      <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-white" />
-                      <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-white" />
-                    </div>
-                    <div className="absolute bottom-4 left-0 right-0 text-center text-white text-sm">
-                      Position ID card within the frame
-                    </div>
-                  </div>
-                  {cameraError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-                      <AlertCircle className="w-4 h-4 inline mr-2" />
-                      {cameraError}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => handleCameraCapture('back')}
-                    disabled={!cameraReady}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Camera className="w-4 h-4 inline mr-2" />
-                    Capture Photo
-                  </button>
-                </div>
-              )}
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Verifying...
             </>
           ) : (
-            <div className="space-y-4">
-              <img src={idBackImage} alt="Back ID" className="w-full max-w-md mx-auto rounded-xl border-2 border-green-300" />
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => retakePhoto('back')}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  <X className="w-4 h-4 inline mr-2" />
-                  Retake
-                </button>
-                <button
-                  onClick={() => advanceToNextStep('selfie', true)}
-                  className="px-6 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700"
-                >
-                  Continue
-                  <ChevronRight className="w-4 h-4 inline ml-2" />
-                </button>
+            <>
+              Verify Identity
+              <ArrowRight className="w-5 h-5" />
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+
+  const renderCyLogin = () => (
+    <div className="space-y-6">
+      <button
+        onClick={() => setCurrentStep(STEPS.SELECT_METHOD)}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to options
+      </button>
+
+      <div className="text-center">
+        <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Globe className="w-8 h-8 text-green-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">CY Login Verification</h2>
+        <p className="text-gray-600">You will be redirected to the Cyprus government eID portal</p>
+      </div>
+
+      <div className="bg-green-50 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <Shield className="w-5 h-5 text-green-600 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-green-800">Secure Government Authentication</p>
+            <p className="text-green-600 mt-1">
+              CY Login uses your Cyprus eID credentials for secure identity verification.
+              You'll be redirected back after authentication.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-sm text-gray-600">You will need:</p>
+        <ul className="space-y-2 text-sm text-gray-600">
+          <li className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-600" />
+            Cyprus eID card or Mobile ID
+          </li>
+          <li className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-600" />
+            Card reader (for eID card) or smartphone (for Mobile ID)
+          </li>
+          <li className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-600" />
+            Your PIN code
+          </li>
+        </ul>
+      </div>
+
+      <button
+        onClick={handleCyLogin}
+        disabled={isLoading}
+        className="w-full py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Connecting to CY Login...
+          </>
+        ) : (
+          <>
+            <Globe className="w-5 h-5" />
+            Continue with CY Login
+          </>
+        )}
+      </button>
+    </div>
+  )
+
+  const renderOcrScan = () => (
+    <div className="space-y-6">
+      <button
+        onClick={() => {
+          stopCamera()
+          setOcrStep('select')
+          setCapturedImage(null)
+          setOcrResult(null)
+          setCurrentStep(STEPS.SELECT_METHOD)
+        }}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to options
+      </button>
+
+      <div className="text-center">
+        <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <CreditCard className="w-8 h-8 text-purple-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Scan ID Document</h2>
+        <p className="text-gray-600">
+          {ocrStep === 'select' && 'Take a photo or upload an image of your ID'}
+          {ocrStep === 'capture' && 'Position your ID within the frame'}
+          {ocrStep === 'processing' && 'Processing your document...'}
+          {ocrStep === 'confirm' && 'Please confirm the extracted information'}
+        </p>
+      </div>
+
+      {/* Select capture method */}
+      {ocrStep === 'select' && (
+        <div className="space-y-3">
+          <button
+            onClick={() => {
+              setOcrStep('capture')
+              startCamera()
+            }}
+            className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-all text-left group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <Camera className="w-6 h-6 text-purple-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900">Use Camera</h3>
+                <p className="text-sm text-gray-500">Take a photo of your ID</p>
               </div>
             </div>
-          )}
+          </button>
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-all text-left group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                <Upload className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900">Upload Image</h3>
+                <p className="text-sm text-gray-500">Upload an existing photo of your ID</p>
+              </div>
+            </div>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          <div className="bg-amber-50 rounded-xl p-4 mt-4">
+            <p className="text-sm text-amber-800">
+              <strong>Accepted documents:</strong> Cyprus National ID Card, Passport, EU ID Card
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Selfie Step */}
-      {scanningStep === 'selfie' && (
-        <div className="text-center">
-          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="w-8 h-8 text-purple-600" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Take a Selfie
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Position your face in the frame for verification
-          </p>
-
-          {/* Mode Toggle */}
-          <div className="flex justify-center gap-2 mb-4">
-            <button
-              onClick={() => toggleCaptureMode('upload')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'upload'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-            >
-              <Upload className="w-4 h-4 inline mr-2" />
-              Upload
-            </button>
-            <button
-              onClick={() => toggleCaptureMode('camera', true)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${captureMode === 'camera'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-            >
-              <Camera className="w-4 h-4 inline mr-2" />
-              Camera
-            </button>
-          </div>
-
-          {!selfieImage ? (
-            <>
-              {captureMode === 'upload' ? (
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  {/* FIX: Removed capture attribute to allow file picker on mobile */}
-                  <input
-                    ref={selfieFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileSelect(e, 'selfie')}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => selfieFileInputRef.current?.click()}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-                  >
-                    Choose Photo
-                  </button>
-                  <p className="text-xs text-gray-500 mt-3">
-                    Select an existing selfie from your device
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="relative w-full max-w-sm mx-auto aspect-[3/4] bg-gray-900 rounded-xl overflow-hidden">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                      style={{ transform: 'scaleX(-1)' }}
-                    />
-                    {/* Loading indicator while camera initializes */}
-                    {!cameraReady && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80">
-                        <div className="text-center">
-                          <RefreshCw className="w-8 h-8 text-white animate-spin mx-auto mb-2" />
-                          <p className="text-white text-sm">Starting camera...</p>
-                        </div>
-                      </div>
-                    )}
-                    {/* Face oval guide */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-64 border-4 border-white/50 rounded-full" />
-                    </div>
-                    <div className="absolute bottom-4 left-0 right-0 text-center text-white text-sm">
-                      Position your face within the oval
-                    </div>
-                  </div>
-                  {cameraError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-                      <AlertCircle className="w-4 h-4 inline mr-2" />
-                      {cameraError}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => handleCameraCapture('selfie')}
-                    disabled={!cameraReady}
-                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Camera className="w-4 h-4 inline mr-2" />
-                    Capture Selfie
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="space-y-4">
-              <img src={selfieImage} alt="Selfie" className="w-full max-w-sm mx-auto rounded-xl border-2 border-green-300" />
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => retakePhoto('selfie')}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  <X className="w-4 h-4 inline mr-2" />
-                  Retake
-                </button>
-              </div>
+      {/* Camera capture */}
+      {ocrStep === 'capture' && (
+        <div className="space-y-4">
+          <div className="relative aspect-[3/2] bg-black rounded-xl overflow-hidden">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+            {/* ID frame overlay */}
+            <div className="absolute inset-4 border-2 border-white/50 rounded-lg">
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-lg" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-lg" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-lg" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-lg" />
             </div>
-          )}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                stopCamera()
+                setOcrStep('select')
+              }}
+              className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={captureFromCamera}
+              className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Camera className="w-5 h-5" />
+              Capture
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Processing Step */}
-      {scanningStep === 'processing' && (
+      {/* Processing */}
+      {ocrStep === 'processing' && (
         <div className="text-center py-8">
-          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <RefreshCw className="w-8 h-8 text-purple-600 animate-spin" />
+          <div className="relative w-24 h-24 mx-auto mb-4">
+            <div className="absolute inset-0 border-4 border-purple-200 rounded-full" />
+            <div className="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin" />
+            <Scan className="absolute inset-0 m-auto w-10 h-10 text-purple-600" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Verifying Your Identity
-          </h3>
-          <div className="space-y-2 text-sm text-gray-600">
-            <p>⚙️ Extracting data from ID card...</p>
-            <p>🔍 Verifying document authenticity...</p>
-            <p>🤳 Matching face with ID photo...</p>
-          </div>
+          <p className="text-gray-600">Scanning and extracting information...</p>
         </div>
       )}
 
-      {/* Complete Step */}
-      {scanningStep === 'complete' && extractedData && (
-        <div className="text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="w-8 h-8 text-green-600" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Identity Verified Successfully!
-          </h3>
+      {/* Confirm OCR result */}
+      {ocrStep === 'confirm' && ocrResult && (
+        <div className="space-y-4">
+          {capturedImage && (
+            <div className="aspect-[3/2] bg-gray-100 rounded-xl overflow-hidden">
+              <img src={capturedImage} alt="Captured ID" className="w-full h-full object-cover" />
+            </div>
+          )}
 
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 mt-4 text-left">
-            <h4 className="text-sm font-medium text-green-800 mb-3">Extracted Information:</h4>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <span className="font-medium text-green-800">Information extracted successfully</span>
+              <span className="ml-auto text-sm text-green-600">{ocrResult.confidence}% confidence</span>
+            </div>
+            
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Name:</span>
-                <span className="font-medium text-gray-900">{extractedData.fullName}</span>
+                <span className="text-gray-600">Document Type:</span>
+                <span className="font-medium text-gray-900">{ocrResult.documentType}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Full Name:</span>
+                <span className="font-medium text-gray-900">{ocrResult.firstName} {ocrResult.lastName}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">ID Number:</span>
-                <span className="font-medium text-gray-900">{extractedData.idNumber}</span>
+                <span className="font-medium text-gray-900">{ocrResult.idNumber}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Date of Birth:</span>
-                <span className="font-medium text-gray-900">{formatDate(extractedData.dateOfBirth)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Nationality:</span>
-                <span className="font-medium text-gray-900">{extractedData.nationality}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Face Match:</span>
-                <span className="font-medium text-green-600 flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" />
-                  {extractedData.faceMatchScore}%
-                </span>
+                <span className="font-medium text-gray-900">{ocrResult.dateOfBirth}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-500">
-            <ShieldCheck className="w-4 h-4 text-green-600" />
-            <span>All captured images are processed securely and not stored</span>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setOcrStep('select')
+                setCapturedImage(null)
+                setOcrResult(null)
+              }}
+              className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+            >
+              Retake
+            </button>
+            <button
+              onClick={confirmOcrResult}
+              disabled={isLoading}
+              className="flex-1 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Check className="w-5 h-5" />
+                  Confirm & Continue
+                </>
+              )}
+            </button>
           </div>
-
-          <button
-            onClick={handleIdScanComplete}
-            className="mt-6 px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-          >
-            Continue to Contact Verification
-            <ChevronRight className="w-4 h-4 inline ml-2" />
-          </button>
         </div>
-      )}
-
-      {/* Back button for ID scanning steps */}
-      {['front', 'back', 'selfie'].includes(scanningStep) && (
-        <button
-          onClick={() => {
-            stopCamera()
-            setVerificationMethod(null)
-            setScanningStep('front')
-            setIdFrontImage(null)
-            setIdBackImage(null)
-            setSelfieImage(null)
-            setCaptureMode('upload')
-          }}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mt-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to verification options
-        </button>
       )}
     </div>
   )
 
-  // Manual Entry Form JSX for Individuals
-  const manualEntryFormJSX = (
-    <form onSubmit={handleIdentitySubmit} className="space-y-4 text-sm">
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          Date of birth
-        </label>
-        <DatePicker
-          selected={form.dateOfBirth ? new Date(form.dateOfBirth) : null}
-          onChange={(date) => setForm(prev => ({
-            ...prev,
-            dateOfBirth: date ? date.toISOString().split('T')[0] : ''
-          }))}
-          dateFormat="dd/MM/yyyy"
-          showYearDropdown
-          showMonthDropdown
-          dropdownMode="select"
-          yearDropdownItemNumber={100}
-          scrollableYearDropdown
-          maxDate={new Date()}
-          minDate={new Date('1900-01-01')}
-          placeholderText="Select your date of birth"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-          wrapperClassName="w-full"
-          customInput={
-            <input
-              type="text"
-              inputMode="none"
-              readOnly
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer bg-white"
-            />
-          }
-          required
-        />
+  const renderIdentityVerification = () => {
+    switch (verificationMethod) {
+      case VERIFICATION_METHODS.MANUAL:
+        return renderManualVerification()
+      case VERIFICATION_METHODS.CY_LOGIN:
+        return renderCyLogin()
+      case VERIFICATION_METHODS.OCR_SCAN:
+        return renderOcrScan()
+      default:
+        return null
+    }
+  }
+
+  const renderContactVerification = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-8 h-8 text-green-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Identity Verified!</h2>
+        <p className="text-gray-600">Now let's verify your contact information</p>
       </div>
 
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-          <IdCard className="w-4 h-4 text-gray-400" />
-          National ID number
-        </label>
-        <input
-          type="text"
-          value={form.idNumber}
-          onChange={handleChange('idNumber')}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g. K123456"
-          required
-        />
-      </div>
+      {!otpSent ? (
+        <>
+          {/* Contact method selection */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-gray-700">Send verification code to:</p>
 
-      <p className="text-[11px] text-gray-500 italic">
-        For this demo, any valid date and ID will succeed.
-      </p>
+            <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+              contactMethod === 'email' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <input
+                type="radio"
+                name="contactMethod"
+                value="email"
+                checked={contactMethod === 'email'}
+                onChange={(e) => setContactMethod(e.target.value)}
+                className="w-4 h-4 text-indigo-600"
+              />
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Mail className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-gray-900">Email</p>
+                <p className="text-sm text-gray-500">{customerData.email}</p>
+              </div>
+            </label>
 
-      <button
-        type="submit"
-        disabled={identityMutation.isLoading}
-        className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
-      >
-        {identityMutation.isLoading ? 'Verifying…' : 'Verify Identity'}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setVerificationMethod(null)}
-        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to verification options
-      </button>
-    </form>
-  )
-
-  // Business Form JSX
-  const businessFormJSX = (
-    <form onSubmit={handleIdentitySubmit} className="space-y-4 text-sm">
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          Date of Registration
-        </label>
-        <DatePicker
-          selected={form.dateOfRegistration ? new Date(form.dateOfRegistration) : null}
-          onChange={(date) => setForm(prev => ({
-            ...prev,
-            dateOfRegistration: date ? date.toISOString().split('T')[0] : ''
-          }))}
-          dateFormat="dd/MM/yyyy"
-          showYearDropdown
-          showMonthDropdown
-          dropdownMode="select"
-          yearDropdownItemNumber={100}
-          scrollableYearDropdown
-          maxDate={new Date()}
-          minDate={new Date('1900-01-01')}
-          placeholderText="Select registration date"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-          wrapperClassName="w-full"
-          customInput={
-            <input
-              type="text"
-              inputMode="none"
-              readOnly
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer bg-white"
-            />
-          }
-          required
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-          <Building2 className="w-4 h-4 text-gray-400" />
-          Registration Number (ΗΕ/ΑΕ/ΟΕ/ΛΤΔ)
-        </label>
-        <input
-          type="text"
-          value={form.registrationNumber}
-          onChange={handleChange('registrationNumber')}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g. HE12345"
-          required
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-          <IdCard className="w-4 h-4 text-gray-400" />
-          TIN (Tax Identification Number)
-        </label>
-        <input
-          type="text"
-          value={form.tin}
-          onChange={handleChange('tin')}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g. 12345678A"
-          required
-        />
-      </div>
-
-      <p className="text-[11px] text-gray-500 italic">
-        For this demo, any values will succeed.
-      </p>
-
-      <button
-        type="submit"
-        disabled={identityMutation.isLoading}
-        className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
-      >
-        {identityMutation.isLoading ? 'Verifying…' : 'Verify Business'}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setVerificationMethod(null)}
-        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to verification options
-      </button>
-    </form>
-  )
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Compact header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-gray-100 px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-600 to-indigo-600 flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-white" />
+            <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+              contactMethod === 'sms' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <input
+                type="radio"
+                name="contactMethod"
+                value="sms"
+                checked={contactMethod === 'sms'}
+                onChange={(e) => setContactMethod(e.target.value)}
+                className="w-4 h-4 text-indigo-600"
+              />
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Smartphone className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-gray-900">SMS</p>
+                <p className="text-sm text-gray-500">{customerData.phone}</p>
+              </div>
+            </label>
           </div>
-          <div>
-            <h1 className="text-sm font-semibold text-gray-900">
-              Secure Verification
-            </h1>
-            <p className="text-[11px] text-gray-500">
-              {session.companyName}
+
+          <button
+            onClick={sendOtp}
+            disabled={isLoading}
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                Send Verification Code
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </button>
+        </>
+      ) : (
+        <>
+          {/* OTP Input */}
+          <div className="bg-indigo-50 rounded-xl p-4 text-center">
+            <p className="text-sm text-indigo-800">
+              We've sent a 6-digit code to{' '}
+              <span className="font-medium">
+                {contactMethod === 'email' ? customerData.email : customerData.phone}
+              </span>
             </p>
           </div>
-        </div>
-      </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6">
-        {/* Progress pills */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          {[
-            { key: 'identity', label: 'Identity' },
-            { key: 'contact', label: 'Contact' },
-            { key: 'otp', label: 'Confirm' },
-          ].map((s, idx) => (
-            <React.Fragment key={s.key}>
-              <div
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${step === s.key
-                  ? 'bg-primary-600 text-white'
-                  : idx < ['identity', 'contact', 'otp'].indexOf(step)
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-500'
-                  }`}
-              >
-                {idx < ['identity', 'contact', 'otp'].indexOf(step) ? (
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                ) : (
-                  <span className="w-4 text-center">{idx + 1}</span>
-                )}
-                <span className="hidden sm:inline">{s.label}</span>
-              </div>
-              {idx < 2 && <div className="w-6 h-0.5 bg-gray-200 rounded" />}
-            </React.Fragment>
-          ))}
-        </div>
-
-        {/* Main content card */}
-        <motion.div
-          key={step + verificationMethod}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5"
-        >
-          {/* Step 1: Identity Verification */}
-          {step === 'identity' && (
-            <>
-              {!verificationMethod ? (
-                <VerificationMethodSelection />
-              ) : verificationMethod === 'idscan' ? (
-                <IdScanningUI />
-              ) : verificationMethod === 'manual' ? (
-                isIndividual ? manualEntryFormJSX : businessFormJSX
-              ) : null}
-            </>
-          )}
-
-          {/* Step 2: Contact confirmation */}
-          {step === 'contact' && (
-            <form onSubmit={handleSendOtp} className="space-y-4 text-sm">
-              <p className="text-xs text-gray-600 mb-2">
-                Please confirm your contact details so we can send you a one-time code.
-              </p>
-
-              <div className="space-y-1">
-                <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  Email address
-                </label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
+              Enter verification code
+            </label>
+            <div className="flex justify-center gap-2">
+              {otpCode.map((digit, index) => (
                 <input
-                  type="email"
-                  value={form.email || session.prefilledEmail || ''}
-                  onChange={handleChange('email')}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
-                />
-              </div>
-
-              {isIndividual && (
-                <>
-                  <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      Mobile number (optional if using email)
-                    </label>
-                    <input
-                      type="tel"
-                      value={form.mobile || session.prefilledMobile || ''}
-                      onChange={handleChange('mobile')}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      placeholder="+357 99 123456"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-700 mb-1">
-                      Where should we send your code?
-                    </p>
-                    <div className="flex gap-3 text-xs">
-                      <label className="inline-flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="channel"
-                          value="SMS"
-                          checked={form.channel === 'SMS'}
-                          onChange={handleChange('channel')}
-                          className="h-3 w-3"
-                        />
-                        <span>SMS</span>
-                      </label>
-                      <label className="inline-flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="channel"
-                          value="EMAIL"
-                          checked={form.channel === 'EMAIL'}
-                          onChange={handleChange('channel')}
-                          className="h-3 w-3"
-                        />
-                        <span>Email</span>
-                      </label>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {!isIndividual && (
-                <p className="text-[11px] text-gray-500">
-                  For businesses, we send the one-time code to the registered contact email.
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={sendOtpMutation.isLoading}
-                className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
-              >
-                {sendOtpMutation.isLoading ? 'Sending code…' : 'Send code'}
-              </button>
-            </form>
-          )}
-
-          {step === 'otp' && (
-            <form onSubmit={handleVerifyOtp} className="space-y-4 text-sm">
-              <p className="text-xs text-gray-600 mb-2">
-                Enter the 6-digit code we sent you. For this demo, the valid code is{' '}
-                <span className="font-mono font-semibold bg-gray-100 px-1.5 py-0.5 rounded">123456</span>.
-              </p>
-
-              <div className="space-y-1">
-                <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-                  <KeyRound className="w-4 h-4 text-gray-400" />
-                  One-time code
-                </label>
-                <input
+                  key={index}
+                  ref={(el) => (otpInputRefs.current[index] = el)}
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
-                  value={form.otp}
-                  onChange={handleChange('otp')}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-3 text-lg tracking-[0.5em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="••••••"
-                  required
+                  value={digit}
+                  onChange={(e) => handleOtpChange(index, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                  className="w-12 h-14 text-center text-xl font-bold border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
-              </div>
+              ))}
+            </div>
+          </div>
 
+          <button
+            onClick={verifyOtp}
+            disabled={isLoading || otpCode.join('').length !== 6}
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Verifying...
+              </>
+            ) : (
+              <>
+                Verify & Continue
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </button>
+
+          {/* Resend */}
+          <div className="text-center">
+            {otpResendTimer > 0 ? (
+              <p className="text-sm text-gray-500">
+                Resend code in {otpResendTimer}s
+              </p>
+            ) : (
               <button
-                type="submit"
-                disabled={verifyOtpMutation.isLoading}
-                className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
+                onClick={sendOtp}
+                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
               >
-                {verifyOtpMutation.isLoading ? 'Verifying…' : 'Verify & open proposal'}
+                Didn't receive the code? Resend
               </button>
-            </form>
-          )}
-        </motion.div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
 
-        {/* Security footer */}
-        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500">
-          <Lock className="w-3.5 h-3.5" />
-          <span>Your data is encrypted and protected</span>
+  const renderVerified = () => (
+    <div className="text-center py-8">
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', duration: 0.5 }}
+        className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+      >
+        <CheckCircle2 className="w-10 h-10 text-green-600" />
+      </motion.div>
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">Verification Complete!</h2>
+      <p className="text-gray-600 mb-6">Redirecting you to your documents...</p>
+      <Loader2 className="w-6 h-6 text-indigo-600 animate-spin mx-auto" />
+    </div>
+  )
+
+  // ============================================
+  // MAIN RENDER
+  // ============================================
+
+  if (currentStep === STEPS.LOADING) {
+    return renderLoading()
+  }
+
+  if (currentStep === STEPS.ERROR) {
+    return renderError()
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-center">
+          <Logo size="md" />
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-lg mx-auto px-4 py-8">
+        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep + (verificationMethod || '')}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              {currentStep === STEPS.SELECT_METHOD && renderSelectMethod()}
+              {currentStep === STEPS.IDENTITY_VERIFICATION && renderIdentityVerification()}
+              {currentStep === STEPS.CONTACT_VERIFICATION && renderContactVerification()}
+              {currentStep === STEPS.VERIFIED && renderVerified()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-6 text-center text-sm text-gray-500">
+          <p>Need help? Contact your agent or our support team</p>
+          <p className="mt-2">
+            <a href="#" className="text-indigo-600 hover:text-indigo-700">Terms of Service</a>
+            {' • '}
+            <a href="#" className="text-indigo-600 hover:text-indigo-700">Privacy Policy</a>
+          </p>
         </div>
       </main>
-
-      {/* Cyprus eID Dialog */}
-      <AnimatePresence>
-        {eidDialogOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
-            >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                    <Shield className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Cyprus eID Provider</h2>
-                    <p className="text-xs text-blue-100">Government Identity Service (Demo)</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="px-6 py-5 space-y-4">
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <p className="text-xs text-amber-800">
-                    <strong>Demo Mode:</strong> In production, you would be redirected to the official Cyprus eID portal to authenticate securely.
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-3">Simulated data:</p>
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 space-y-2 text-xs">
-                    <div className="flex items-start gap-2">
-                      <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">Name:</span><br />
-                        <span className="text-gray-900">{session?.customerName || 'Demo User'}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <IdCard className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">ID:</span><br />
-                        <span className="text-gray-900">{session?.eidData?.idNumber || session?.expectedIdNumber || 'X1234567'}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">Date of Birth:</span><br />
-                        <span className="text-gray-900">{session?.eidData?.dateOfBirth || '12 March 1985'}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Mail className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">Email:</span><br />
-                        <span className="text-gray-900">{session?.prefilledEmail || 'eid.user@example.com'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={handleEidDemoCancel}
-                  className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEidDemoConfirm}
-                  className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Confirm eID Login
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

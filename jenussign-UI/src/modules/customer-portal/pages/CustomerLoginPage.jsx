@@ -14,9 +14,19 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-import { customerAuthApi } from '../../../api/mockApi'
-import useAuthStore from '../../../stores/authStore'
+import { envelopesApi } from '../../../api/envelopesApi'
+import useAuthStore from '../../../shared/store/authStore'
+import { TrustIndicatorBar } from '../../../shared/components/ComplianceBadges'
+import { componentPresets, animations } from '../../../shared/constants/designSystem'
 
+/**
+ * CustomerLoginPage - Passwordless OTP login for customers
+ * 
+ * Flow:
+ * 1. Enter email address
+ * 2. Receive OTP via email
+ * 3. Verify OTP and access dashboard
+ */
 const CustomerLoginPage = () => {
   const navigate = useNavigate()
   const { setCustomerAuth } = useAuthStore()
@@ -35,7 +45,8 @@ const CustomerLoginPage = () => {
 
     setLoading(true)
     try {
-      await customerAuthApi.requestOtp({ email })
+      // In production, this would send actual OTP
+      await envelopesApi.sendOtp(null, 'EMAIL')
       toast.success('OTP sent to your email')
       setStep('otp')
     } catch (error) {
@@ -54,8 +65,15 @@ const CustomerLoginPage = () => {
 
     setLoading(true)
     try {
-      const response = await customerAuthApi.verifyOtp({ email, otp })
-      setCustomerAuth(response.token, response.customer)
+      await envelopesApi.verifyOtp(null, otp)
+      
+      // Create customer session
+      const customer = {
+        email,
+        name: email.split('@')[0], // Demo: use email prefix as name
+      }
+      
+      setCustomerAuth('demo-token', customer)
       toast.success('Login successful')
       navigate('/customer/dashboard')
     } catch (error) {
@@ -76,33 +94,15 @@ const CustomerLoginPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 flex flex-col">
       {/* Trust Indicators Bar */}
-      <div className="bg-white/10 backdrop-blur-sm border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 py-2">
-          <div className="flex items-center justify-center gap-6 text-xs text-white/90">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
-              <span>Secure Connection</span>
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-blue-300" />
-              <span>eIDAS Compliant</span>
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-purple-300" />
-              <span>GDPR Protected</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <TrustIndicatorBar />
 
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          {...animations.pageEnter}
           className="w-full max-w-md"
         >
-          {/* Logo Section - Fixed */}
+          {/* Logo Section */}
           <div className="text-center mb-8">
             {/* Logo Icon with Badge */}
             <div className="inline-block relative mb-4">
@@ -183,7 +183,7 @@ const CustomerLoginPage = () => {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/25 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    className={componentPresets.button.primary + ' w-full py-3'}
                   >
                     {loading ? (
                       <>
@@ -231,7 +231,7 @@ const CustomerLoginPage = () => {
                   <button
                     type="submit"
                     disabled={loading || otp.length < 6}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/25 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    className={componentPresets.button.primary + ' w-full py-3'}
                   >
                     {loading ? (
                       <>

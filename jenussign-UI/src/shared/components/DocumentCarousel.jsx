@@ -1,39 +1,47 @@
 import React, { useState, useRef } from 'react'
-import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
-  Circle,
   Eye,
   AlertCircle,
   Lock,
   Package,
-  Layers,
   ArrowRight,
   Sparkles,
 } from 'lucide-react'
-import MobileFriendlyPdfViewer from './MobileFriendlyPdfViewer'
+
+import MobileFriendlyPdfViewer from '../../shared/components/MobileFriendlyPdfViewer'
+import { animations, componentPresets } from '../../shared/constants/designSystem'
 
 /**
- * DocumentCarouselV2 - Mobile-first swipeable document carousel
+ * DocumentCarousel - Mobile-first swipeable document carousel
+ * 
+ * Used in both Customer Portal and Agent Portal for reviewing
+ * multiple documents in an envelope before signing.
  * 
  * Features:
  * - Swipe gestures for navigation
  * - Visual card stack effect
  * - Clear progress indication
  * - Large touch-friendly buttons
+ * - Document confirmation tracking
  * 
  * Props:
- * - documents: Array of { id, title, url, pages?, confirmed? }
+ * - documents: Array of { id, title, url, pages?, status? }
  * - onAllConfirmed: Callback when all documents are confirmed
  * - onDocumentConfirmed: Callback when a single document is confirmed
+ * - showProgress: Show progress header (default: true)
+ * - envelopeTitle: Title for the envelope header
  */
-export default function DocumentCarouselV2({ 
+export default function DocumentCarousel({ 
   documents = [], 
   onAllConfirmed,
   onDocumentConfirmed,
+  showProgress = true,
+  envelopeTitle = 'Document Package',
 }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [confirmedDocs, setConfirmedDocs] = useState({})
@@ -107,67 +115,40 @@ export default function DocumentCarouselV2({
     )
   }
 
-  // Animation variants
-  const slideVariants = {
-    enter: (direction) => ({
-      x: direction > 0 ? 300 : -300,
-      opacity: 0,
-      scale: 0.9,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-      scale: 1,
-      transition: {
-        type: 'spring',
-        stiffness: 300,
-        damping: 30,
-      }
-    },
-    exit: (direction) => ({
-      x: direction < 0 ? 300 : -300,
-      opacity: 0,
-      scale: 0.9,
-      transition: {
-        type: 'spring',
-        stiffness: 300,
-        damping: 30,
-      }
-    }),
-  }
-
   return (
     <div className="space-y-4">
       {/* Header with envelope info */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-4 sm:p-5 text-white">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            <Package className="w-5 h-5" />
+      {showProgress && (
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-4 sm:p-5 text-white">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg">{envelopeTitle}</h2>
+              <p className="text-blue-100 text-sm">
+                {documents.length} document{documents.length !== 1 ? 's' : ''} to review
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold text-lg">Review & Sign Documents</h2>
-            <p className="text-blue-100 text-sm">
-              {documents.length} document{documents.length !== 1 ? 's' : ''} in this envelope
-            </p>
-          </div>
-        </div>
 
-        {/* Progress bar */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-blue-100">Progress</span>
-            <span className="font-medium">{confirmedCount} of {documents.length} reviewed</span>
-          </div>
-          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full bg-white rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${(confirmedCount / documents.length) * 100}%` }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-            />
+          {/* Progress bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-blue-100">Progress</span>
+              <span className="font-medium">{confirmedCount} of {documents.length} reviewed</span>
+            </div>
+            <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-white rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${(confirmedCount / documents.length) * 100}%` }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Document Pills - Horizontal Scrollable */}
       <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -198,8 +179,7 @@ export default function DocumentCarouselV2({
                 {isConfirmed ? (
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 ) : canAccess ? (
-                  <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold flex-shrink-0
-                    ${isCurrent ? 'border-white text-white' : 'border-current'}">
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? 'border-white text-white' : 'border-current'}`}>
                     {index + 1}
                   </span>
                 ) : (
@@ -236,7 +216,7 @@ export default function DocumentCarouselV2({
           <motion.div
             key={currentDoc.id}
             custom={direction}
-            variants={slideVariants}
+            variants={animations.slideVariants}
             initial="enter"
             animate="center"
             exit="exit"
@@ -281,14 +261,12 @@ export default function DocumentCarouselV2({
 
             {/* PDF Viewer */}
             <div className="p-3 sm:p-4">
-              <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                <MobileFriendlyPdfViewer
-                  src={currentDoc.url}
-                  title={currentDoc.title}
-                  height="350px"
-                  showDownload={true}
-                />
-              </div>
+              <MobileFriendlyPdfViewer
+                src={currentDoc.url}
+                title={currentDoc.title}
+                height="350px"
+                showDownload={true}
+              />
             </div>
 
             {/* Action Footer */}
@@ -302,7 +280,7 @@ export default function DocumentCarouselV2({
                   {currentIndex < documents.length - 1 && (
                     <button
                       onClick={handleNext}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                      className={componentPresets.button.primary}
                     >
                       Next Document
                       <ChevronRight className="w-4 h-4" />
@@ -320,7 +298,7 @@ export default function DocumentCarouselV2({
                   
                   <button
                     onClick={handleConfirmDocument}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-all active:scale-[0.98]"
+                    className={`${componentPresets.button.primary} w-full py-3`}
                   >
                     <CheckCircle2 className="w-5 h-5" />
                     I've Reviewed This Document
@@ -351,11 +329,7 @@ export default function DocumentCarouselV2({
         <button
           onClick={handlePrevious}
           disabled={currentIndex === 0}
-          className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all ${
-            currentIndex === 0
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 active:scale-[0.98]'
-          }`}
+          className={`flex-1 sm:flex-none ${currentIndex === 0 ? componentPresets.button.ghost + ' opacity-50 cursor-not-allowed' : componentPresets.button.secondary}`}
         >
           <ChevronLeft className="w-5 h-5" />
           <span>Previous</span>
@@ -386,11 +360,7 @@ export default function DocumentCarouselV2({
         <button
           onClick={handleNext}
           disabled={currentIndex === documents.length - 1 || !isCurrentConfirmed}
-          className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all ${
-            currentIndex === documents.length - 1 || !isCurrentConfirmed
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]'
-          }`}
+          className={`flex-1 sm:flex-none ${(currentIndex === documents.length - 1 || !isCurrentConfirmed) ? componentPresets.button.ghost + ' opacity-50 cursor-not-allowed' : componentPresets.button.primary}`}
         >
           <span>Next</span>
           <ChevronRight className="w-5 h-5" />
@@ -400,8 +370,7 @@ export default function DocumentCarouselV2({
       {/* All Confirmed Celebration */}
       {allConfirmed && (
         <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
+          {...animations.celebration}
           className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-5 text-white shadow-lg shadow-green-500/30"
         >
           <div className="flex items-center gap-4">

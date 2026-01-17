@@ -2,24 +2,15 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft,
-  User,
+  Building2,
   Mail,
   Phone,
   MapPin,
   CreditCard,
-  Calendar,
   Save,
-  UserCircle,
-  Building2,
+  User,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-// Mock data for dropdowns
-const mockAgents = [
-  { id: 'agent-001', name: 'Maria Georgiou', broker: 'Cyprus Insurance Brokers' },
-  { id: 'agent-002', name: 'Andreas Papadopoulos', broker: 'Mediterranean Insurance' },
-  { id: 'agent-003', name: 'Nikos Konstantinou', broker: 'Cyprus Insurance Brokers' },
-]
 
 const mockEmployees = [
   { id: 'emp-001', name: 'Elena Christodoulou', department: 'Sales' },
@@ -27,21 +18,22 @@ const mockEmployees = [
   { id: 'emp-003', name: 'Anna Kyriacou', department: 'Claims' },
 ]
 
-const CustomerCreatePage = () => {
+const BrokerCreatePage = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
+    registrationNumber: '',
     email: '',
     phone: '',
-    idNumber: '',
-    dateOfBirth: '',
     address: '',
     city: '',
     postalCode: '',
     country: 'Cyprus',
-    assignedAgentId: '',
-    assignedEmployeeId: '',
+    contactPerson: '',
+    contactEmail: '',
+    contactPhone: '',
+    assignedEmployeeIds: [],
     notes: '',
   })
 
@@ -50,78 +42,81 @@ const CustomerCreatePage = () => {
     setFormData({ ...formData, [name]: value })
   }
 
+  const handleEmployeeToggle = (empId) => {
+    const current = formData.assignedEmployeeIds
+    if (current.includes(empId)) {
+      setFormData({ ...formData, assignedEmployeeIds: current.filter(id => id !== empId) })
+    } else {
+      setFormData({ ...formData, assignedEmployeeIds: [...current, empId] })
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!formData.name || !formData.email || !formData.idNumber || !formData.assignedAgentId) {
+    if (!formData.name || !formData.email || !formData.registrationNumber) {
       toast.error('Please fill in all required fields')
       return
     }
 
     setLoading(true)
-    
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000))
     
-    toast.success('Customer created successfully!')
-    navigate('/portal/customers')
+    toast.success('Broker created successfully!')
+    navigate('/portal/brokers')
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate('/portal/customers')}
-          className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
-        >
+        <button onClick={() => navigate('/portal/brokers')} className="p-2 rounded-xl hover:bg-gray-100">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add New Customer</h1>
-          <p className="text-gray-500">Create a new customer record</p>
+          <h1 className="text-2xl font-bold text-gray-900">Add New Broker</h1>
+          <p className="text-gray-500">Register a new insurance broker company</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Personal Information */}
+          {/* Company Information */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                <User className="w-5 h-5 text-gray-400" />
-                Personal Information
+                <Building2 className="w-5 h-5 text-gray-400" />
+                Company Information
               </h2>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name <span className="text-red-500">*</span>
+                  Company Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Enter company name"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                   required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ID Number <span className="text-red-500">*</span>
+                  Registration Number <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
-                    name="idNumber"
-                    value={formData.idNumber}
+                    name="registrationNumber"
+                    value={formData.registrationNumber}
                     onChange={handleChange}
-                    placeholder="e.g., X1234567"
+                    placeholder="e.g., HE-123456"
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                     required
                   />
@@ -129,33 +124,8 @@ const CustomerCreatePage = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="date"
-                    name="dateOfBirth"
-                    value={formData.dateOfBirth}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Contact Information */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Mail className="w-5 h-5 text-gray-400" />
-                Contact Information
-              </h2>
-            </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address <span className="text-red-500">*</span>
+                  Email <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -164,7 +134,7 @@ const CustomerCreatePage = () => {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    placeholder="customer@example.com"
+                    placeholder="company@example.com"
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                     required
                   />
@@ -172,7 +142,7 @@ const CustomerCreatePage = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -180,12 +150,12 @@ const CustomerCreatePage = () => {
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    placeholder="+357 99 123 456"
+                    placeholder="+357 22 123 456"
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
               </div>
-              
+
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
                 <div className="relative">
@@ -200,131 +170,108 @@ const CustomerCreatePage = () => {
                   />
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.city}
-                  onChange={handleChange}
+                <input type="text" name="city" value={formData.city} onChange={handleChange}
                   placeholder="Nicosia"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
               </div>
-              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
-                <input
-                  type="text"
-                  name="postalCode"
-                  value={formData.postalCode}
-                  onChange={handleChange}
+                <input type="text" name="postalCode" value={formData.postalCode} onChange={handleChange}
                   placeholder="1065"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                />
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
               </div>
             </div>
           </div>
 
-          {/* Assignment */}
+          {/* Contact Person */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                <UserCircle className="w-5 h-5 text-gray-400" />
-                Assignment
+                <User className="w-5 h-5 text-gray-400" />
+                Primary Contact Person
               </h2>
             </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned Agent <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="assignedAgentId"
-                  value={formData.assignedAgentId}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
-                  required
-                >
-                  <option value="">Select an agent...</option>
-                  {mockAgents.map(agent => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name} ({agent.broker})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Required: The agent managing this customer</p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
+                <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange}
+                  placeholder="Full name"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned Employee (Optional)
-                </label>
-                <select
-                  name="assignedEmployeeId"
-                  value={formData.assignedEmployeeId}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
-                >
-                  <option value="">None (Broker business only)</option>
-                  {mockEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.department})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Optional: For direct insurance business</p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
+                <input type="email" name="contactEmail" value={formData.contactEmail} onChange={handleChange}
+                  placeholder="contact@example.com"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
+                <input type="tel" name="contactPhone" value={formData.contactPhone} onChange={handleChange}
+                  placeholder="+357 99 123 456"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500" />
               </div>
             </div>
           </div>
 
-          {/* Notes */}
+          {/* Assigned Employees */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900">Additional Notes</h2>
+              <h2 className="font-semibold text-gray-900">Assigned Employees (Optional)</h2>
+              <p className="text-sm text-gray-500 mt-1">Select employees to manage this broker account</p>
             </div>
             <div className="p-6">
-              <textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Any additional notes about this customer..."
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-              />
+              <div className="space-y-2">
+                {mockEmployees.map(emp => (
+                  <label key={emp.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.assignedEmployeeIds.includes(emp.id)}
+                      onChange={() => handleEmployeeToggle(emp.id)}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    <div>
+                      <p className="font-medium text-gray-900">{emp.name}</p>
+                      <p className="text-sm text-gray-500">{emp.department}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Summary */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden sticky top-6">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900">Summary</h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <p className="text-sm text-gray-500">Customer Name</p>
+                <p className="text-sm text-gray-500">Company Name</p>
                 <p className="font-medium text-gray-900">{formData.name || '—'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Registration</p>
+                <p className="font-medium text-gray-900">{formData.registrationNumber || '—'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Email</p>
                 <p className="font-medium text-gray-900">{formData.email || '—'}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Assigned Agent</p>
-                <p className="font-medium text-gray-900">
-                  {mockAgents.find(a => a.id === formData.assignedAgentId)?.name || '—'}
-                </p>
+                <p className="text-sm text-gray-500">Assigned Employees</p>
+                <p className="font-medium text-gray-900">{formData.assignedEmployeeIds.length || '0'}</p>
               </div>
             </div>
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
               >
                 {loading ? (
                   <>
@@ -334,14 +281,11 @@ const CustomerCreatePage = () => {
                 ) : (
                   <>
                     <Save className="w-5 h-5" />
-                    Create Customer
+                    Create Broker
                   </>
                 )}
               </button>
-              <Link
-                to="/portal/customers"
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-gray-600 mt-2 hover:text-gray-900"
-              >
+              <Link to="/portal/brokers" className="w-full flex items-center justify-center px-4 py-2.5 text-gray-600 mt-2 hover:text-gray-900">
                 Cancel
               </Link>
             </div>
@@ -352,4 +296,4 @@ const CustomerCreatePage = () => {
   )
 }
 
-export default CustomerCreatePage
+export default BrokerCreatePage

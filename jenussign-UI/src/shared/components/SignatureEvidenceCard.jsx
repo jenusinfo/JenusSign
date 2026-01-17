@@ -1,6 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { QRCodeSVG } from 'qrcode.react' // npm install qrcode.react
 import {
   Shield,
   ChevronDown,
@@ -22,6 +21,108 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+import { animations } from '../constants/designSystem'
+
+/**
+ * QRCodeCanvas - Simple QR code visualization
+ * For production, use a proper QR library
+ */
+function QRCodeCanvas({ value, size = 140 }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    if (!canvasRef.current || !value) return
+
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    
+    // Generate simple QR-like pattern based on value hash
+    const qr = generateQRMatrix(value)
+    const moduleCount = qr.length
+    const moduleSize = size / moduleCount
+
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, size, size)
+
+    ctx.fillStyle = '#1a1a2e'
+    for (let row = 0; row < moduleCount; row++) {
+      for (let col = 0; col < moduleCount; col++) {
+        if (qr[row][col]) {
+          ctx.fillRect(
+            col * moduleSize,
+            row * moduleSize,
+            moduleSize,
+            moduleSize
+          )
+        }
+      }
+    }
+  }, [value, size])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={size}
+      height={size}
+      className="rounded-lg"
+    />
+  )
+}
+
+// Simple QR-like matrix generator (visual representation only)
+function generateQRMatrix(text) {
+  const size = 25
+  const matrix = Array(size).fill(null).map(() => Array(size).fill(false))
+  
+  // Add finder patterns
+  const addFinderPattern = (startRow, startCol) => {
+    for (let r = 0; r < 7; r++) {
+      for (let c = 0; c < 7; c++) {
+        if (r === 0 || r === 6 || c === 0 || c === 6 || 
+            (r >= 2 && r <= 4 && c >= 2 && c <= 4)) {
+          matrix[startRow + r][startCol + c] = true
+        }
+      }
+    }
+  }
+  
+  addFinderPattern(0, 0)
+  addFinderPattern(0, size - 7)
+  addFinderPattern(size - 7, 0)
+  
+  // Add timing patterns
+  for (let i = 8; i < size - 8; i++) {
+    matrix[6][i] = i % 2 === 0
+    matrix[i][6] = i % 2 === 0
+  }
+  
+  // Add data pattern based on text hash
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i)
+    hash = hash & hash
+  }
+  
+  for (let r = 9; r < size - 9; r++) {
+    for (let c = 9; c < size - 9; c++) {
+      const bit = (hash >> ((r * size + c) % 32)) & 1
+      matrix[r][c] = bit === 1 || (r + c) % 3 === 0
+    }
+  }
+  
+  return matrix
+}
+
+/**
+ * SignatureEvidenceCard - Displays signature verification details
+ * 
+ * Features:
+ * - Collapsible/expandable view
+ * - QR code for verification
+ * - Copy hash and URL functionality
+ * - Certificate chain display
+ * - eIDAS compliance checklist
+ */
 export default function SignatureEvidenceCard({ evidence, className = '' }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [copiedHash, setCopiedHash] = useState(false)
@@ -38,23 +139,21 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
     otpVerified,
     signerId,
     signerName,
-    signerIdMasked,
     agentId,
     agentName,
     certificateChain = [],
     proposalRef,
     verificationCode,
-    envelopeRef,
   } = evidence
 
   // Generate verification URL
   const verificationBaseUrl = 'https://verify.jenussign.com'
-  const verificationId = verificationCode || envelopeRef || proposalRef?.replace(/-/g, '') || 'DEMO123'
+  const verificationId = verificationCode || proposalRef?.replace(/-/g, '') || 'DEMO123'
   const verificationUrl = `${verificationBaseUrl}/${verificationId}`
 
   const handleCopyHash = async () => {
     try {
-      await navigator.clipboard.writeText(documentHash)
+      await navigator.clipboard.writeText(documentHash || 'N/A')
       setCopiedHash(true)
       toast.success('Hash copied to clipboard')
       setTimeout(() => setCopiedHash(false), 2000)
@@ -83,7 +182,6 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      timeZoneName: 'short',
     })
   }
 
@@ -105,14 +203,14 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
                   Signature Evidence
                 </h3>
                 <p className="text-xs text-green-100">
-                  eIDAS Article 26 Compliant • Legally Binding
+                  eIDAS Article 26 Compliant - Legally Binding
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-white/20 rounded-full">
                 <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                <span className="text-xs font-medium text-white">Verified</span>
+                <span className="text-xs text-white font-medium">Verified</span>
               </div>
               {isExpanded ? (
                 <ChevronUp className="w-5 h-5 text-white" />
@@ -124,7 +222,7 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
         </div>
       </button>
 
-      {/* Collapsible Content */}
+      {/* Expandable Content */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -132,83 +230,49 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="overflow-hidden"
           >
             <div className="p-5 space-y-4">
-              
-              {/* QR Code Verification Section */}
-              <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 rounded-xl p-4 border border-indigo-200">
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  {/* QR Code */}
-                  <div className="flex-shrink-0">
-                    <div className="bg-white p-3 rounded-xl shadow-sm border border-indigo-100">
-                      <QRCodeSVG
-                        value={verificationUrl}
-                        size={120}
-                        level="M"
-                        includeMargin={false}
-                        bgColor="#ffffff"
-                        fgColor="#1e1b4b"
-                        imageSettings={{
-                          src: '/logo-icon.png', // Optional: Add your logo in center
-                          height: 24,
-                          width: 24,
-                          excavate: true,
-                        }}
-                      />
-                    </div>
+              {/* QR Code & Verification URL */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                <div className="bg-white p-3 rounded-xl shadow-sm">
+                  <QRCodeCanvas value={verificationUrl} size={120} />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Verification URL
+                  </p>
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <code className="text-xs font-mono text-indigo-600 bg-white px-2 py-1 rounded border border-indigo-200 truncate max-w-[200px]">
+                      {verificationUrl}
+                    </code>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCopyUrl()
+                      }}
+                      className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors"
+                    >
+                      {copiedUrl ? (
+                        <Check className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                    <a
+                      href={verificationUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4 text-indigo-500" />
+                    </a>
                   </div>
-                  
-                  {/* Verification Info */}
-                  <div className="flex-1 text-center sm:text-left">
-                    <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
-                      <QrCode className="w-5 h-5 text-indigo-600" />
-                      <h4 className="font-semibold text-gray-900">Verify This Document</h4>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3">
-                      Scan the QR code or visit the link below to verify the authenticity of this signed document.
-                    </p>
-                    
-                    {/* Verification URL */}
-                    <div className="bg-white rounded-lg border border-indigo-200 p-2">
-                      <div className="flex items-center gap-2">
-                        <code className="flex-1 text-xs sm:text-sm font-mono text-indigo-700 truncate">
-                          {verificationUrl}
-                        </code>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCopyUrl()
-                          }}
-                          className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors flex-shrink-0"
-                          title="Copy URL"
-                        >
-                          {copiedUrl ? (
-                            <Check className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <Copy className="w-4 h-4 text-indigo-500" />
-                          )}
-                        </button>
-                        <a
-                          href={verificationUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors flex-shrink-0"
-                          title="Open verification page"
-                        >
-                          <ExternalLink className="w-4 h-4 text-indigo-500" />
-                        </a>
-                      </div>
-                    </div>
-                    
-                    {/* Verification Code */}
-                    <div className="mt-2 flex items-center justify-center sm:justify-start gap-2">
-                      <span className="text-xs text-gray-500">Verification Code:</span>
-                      <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
-                        {verificationId}
-                      </span>
-                    </div>
+                  <div className="mt-2 flex items-center justify-center sm:justify-start gap-2">
+                    <span className="text-xs text-gray-500">Verification Code:</span>
+                    <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
+                      {verificationId}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -217,12 +281,12 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Hash className="w-4.5 h-4.5 text-purple-600" />
+                    <Hash className="w-4 h-4 text-purple-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-gray-500 mb-1">Document Hash (SHA-256)</p>
                     <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 truncate block">
+                      <code className="text-xs font-mono text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 truncate block flex-1">
                         {documentHash || 'a3f2b8c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1'}
                       </code>
                       <button
@@ -231,7 +295,6 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
                           handleCopyHash()
                         }}
                         className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
-                        title="Copy hash"
                       >
                         {copiedHash ? (
                           <Check className="w-4 h-4 text-green-600" />
@@ -291,7 +354,7 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
                     <span className="text-xs font-medium text-gray-600">IP Address</span>
                   </div>
                   <p className="text-sm font-medium text-gray-900 font-mono">
-                    {ipAddress || '192.168.1.1'}
+                    {ipAddress || '192.168.1.xxx'}
                   </p>
                 </div>
 
@@ -309,17 +372,15 @@ export default function SignatureEvidenceCard({ evidence, className = '' }) {
 
               {/* Signer & Agent Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Signer */}
                 <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100">
                   <div className="flex items-center gap-2 mb-1">
                     <User className="w-4 h-4 text-indigo-600" />
                     <span className="text-xs font-medium text-indigo-700">Signer</span>
                   </div>
                   <p className="text-sm font-medium text-gray-900">{signerName || 'Customer'}</p>
-                  <p className="text-xs text-gray-500 font-mono">{signerIdMasked || signerId || 'ID: ••••••89'}</p>
+                  <p className="text-xs text-gray-500 font-mono">ID: {signerId || '------89'}</p>
                 </div>
 
-                {/* Agent */}
                 {(agentId || agentName) && (
                   <div className="bg-teal-50 rounded-xl p-3 border border-teal-100">
                     <div className="flex items-center gap-2 mb-1">

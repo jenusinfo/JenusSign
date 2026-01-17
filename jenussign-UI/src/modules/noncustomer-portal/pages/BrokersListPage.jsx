@@ -1,191 +1,231 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { 
-  Building2, 
-  Mail, 
-  Search, 
-  AlertCircle, 
-  RefreshCw,
-  Users 
+import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import {
+  Plus,
+  Search,
+  Building2,
+  Mail,
+  Phone,
+  ChevronRight,
+  Users,
+  FileText,
+  MapPin,
 } from 'lucide-react'
-import { usersApi } from '../../../api/mockApi'
-import useAuthStore from '../../../stores/authStore'
+
+const mockBrokers = [
+  {
+    id: 'broker-001',
+    name: 'Cyprus Insurance Brokers Ltd',
+    registrationNumber: 'HE-123456',
+    email: 'info@cyprusbrokers.com.cy',
+    phone: '+357 22 111 222',
+    address: 'Nicosia, Cyprus',
+    contactPerson: 'Stavros Michaelides',
+    status: 'active',
+    totalAgents: 5,
+    totalCustomers: 125,
+    totalEnvelopes: 450,
+    createdAt: '2020-01-15T10:00:00Z',
+  },
+  {
+    id: 'broker-002',
+    name: 'Mediterranean Insurance Services',
+    registrationNumber: 'HE-234567',
+    email: 'contact@medinsurance.com.cy',
+    phone: '+357 22 333 444',
+    address: 'Limassol, Cyprus',
+    contactPerson: 'Maria Georgiou',
+    status: 'active',
+    totalAgents: 8,
+    totalCustomers: 245,
+    totalEnvelopes: 890,
+    createdAt: '2019-03-20T14:30:00Z',
+  },
+  {
+    id: 'broker-003',
+    name: 'Island Risk Solutions',
+    registrationNumber: 'HE-345678',
+    email: 'office@islandrisk.com.cy',
+    phone: '+357 22 555 666',
+    address: 'Larnaca, Cyprus',
+    contactPerson: 'Andreas Petrou',
+    status: 'active',
+    totalAgents: 3,
+    totalCustomers: 67,
+    totalEnvelopes: 180,
+    createdAt: '2021-06-10T09:00:00Z',
+  },
+  {
+    id: 'broker-004',
+    name: 'Paphos Insurance Agency',
+    registrationNumber: 'HE-456789',
+    email: 'info@paphosins.com.cy',
+    phone: '+357 26 777 888',
+    address: 'Paphos, Cyprus',
+    contactPerson: 'Eleni Christou',
+    status: 'inactive',
+    totalAgents: 2,
+    totalCustomers: 45,
+    totalEnvelopes: 98,
+    createdAt: '2022-01-05T11:00:00Z',
+  },
+]
 
 const BrokersListPage = () => {
-  const navigate = useNavigate()
-  const { user } = useAuthStore()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
 
-  const isAdminOrEmployee =
-    user?.role === 'Admin' || user?.role === 'Employee'
-
-  // Access control
-  if (!isAdminOrEmployee) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-          <div>
-            <h3 className="font-medium text-red-900">Access Denied</h3>
-            <p className="text-sm text-red-700 mt-1">
-              Only administrators and employees can view brokers.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const [search, setSearch] = useState('')
-
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ['brokers', { search }],
-    queryFn: () =>
-      usersApi.getUsers({
-        role: 'Broker',
-        search: search || undefined,
-      }),
+  const filteredBrokers = mockBrokers.filter((broker) => {
+    const matchesSearch =
+      broker.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      broker.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      broker.registrationNumber.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    const matchesStatus = statusFilter === 'ALL' || broker.status === statusFilter
+    
+    return matchesSearch && matchesStatus
   })
 
-  const brokers = data?.items || []
-
-  // Simple stats
-  const totalBrokers = brokers.length
-  const activeBrokers = brokers.filter((b) => b.isActive !== false).length
-
-  if (isError) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-          <div>
-            <h3 className="font-medium text-red-900">Error Loading Brokers</h3>
-            <p className="text-sm text-red-700 mt-1">
-              {error?.message || 'Failed to load brokers'}
-            </p>
-            <button
-              onClick={() => refetch()}
-              className="mt-2 text-sm text-red-600 hover:text-red-800 font-medium flex items-center gap-1"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Try again
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Brokers</h1>
-          <p className="text-sm text-gray-500">
-            Manage insurance brokers and view their assigned agents.
-          </p>
+          <p className="text-gray-500 mt-1">Manage insurance broker companies</p>
+        </div>
+        <Link
+          to="/portal/brokers/new"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          Add Broker
+        </Link>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search brokers by name, email, or registration..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+          >
+            <option value="ALL">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-100 rounded-lg">
-              <Building2 className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Total Brokers</p>
-              <p className="text-xl font-bold text-gray-900">{totalBrokers}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Users className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Active Brokers</p>
-              <p className="text-xl font-bold text-gray-900">{activeBrokers}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters / search */}
-      <div className="bg-white rounded-lg shadow-sm p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Search
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, email, or business key..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* List */}
-      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <div className="border-b px-4 py-3 text-sm font-medium text-gray-500 flex justify-between">
-          <span>
-            {isLoading
-              ? 'Loading brokers…'
-              : `Showing ${brokers.length} broker${brokers.length === 1 ? '' : 's'}`}
-          </span>
-        </div>
-
-        {isLoading ? (
-          <div className="p-6 text-gray-500 text-center">Loading brokers…</div>
-        ) : brokers.length === 0 ? (
-          <div className="p-6 text-gray-500 text-center">
-            No brokers found. Try adjusting your search.
+      {/* Brokers Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {filteredBrokers.length === 0 ? (
+          <div className="col-span-full bg-white rounded-xl border border-gray-200 px-6 py-12 text-center">
+            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-1">No brokers found</h3>
+            <p className="text-gray-500 mb-4">Try adjusting your search or filters</p>
           </div>
         ) : (
-          <ul className="divide-y">
-            {brokers.map((b) => (
-              <li
-                key={b.id}
-                className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
-                onClick={() => navigate(`/portal/brokers/${b.id}`)}
+          filteredBrokers.map((broker, index) => (
+            <motion.div
+              key={broker.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Link
+                to={`/portal/brokers/${broker.id}`}
+                className="block bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md hover:border-indigo-200 transition-all"
               >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-indigo-100">
-                    <Building2 className="text-indigo-600" size={20} />
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-500 rounded-xl flex items-center justify-center text-white">
+                      <Building2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{broker.name}</h3>
+                      <p className="text-sm text-gray-500">{broker.registrationNumber}</p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-medium text-gray-900">
-                      {b.displayName}
-                    </div>
-                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                      <Mail size={14} />
-                      {b.email}
-                    </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    broker.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {broker.status}
+                  </span>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    <span className="truncate">{broker.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    {broker.phone}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    {broker.address}
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">{b.businessKey}</div>
-              </li>
-            ))}
-          </ul>
+
+                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1 text-sm">
+                      <Users className="w-4 h-4 text-gray-400" />
+                      <span className="font-medium text-gray-900">{broker.totalAgents}</span>
+                      <span className="text-gray-500">agents</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm">
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <span className="font-medium text-gray-900">{broker.totalEnvelopes}</span>
+                      <span className="text-gray-500">envelopes</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                </div>
+              </Link>
+            </motion.div>
+          ))
         )}
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Total Brokers</p>
+          <p className="text-2xl font-bold text-gray-900">{mockBrokers.length}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Total Agents</p>
+          <p className="text-2xl font-bold text-blue-600">
+            {mockBrokers.reduce((sum, b) => sum + b.totalAgents, 0)}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Total Customers</p>
+          <p className="text-2xl font-bold text-purple-600">
+            {mockBrokers.reduce((sum, b) => sum + b.totalCustomers, 0)}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm text-gray-500">Total Envelopes</p>
+          <p className="text-2xl font-bold text-green-600">
+            {mockBrokers.reduce((sum, b) => sum + b.totalEnvelopes, 0)}
+          </p>
+        </div>
       </div>
     </div>
   )

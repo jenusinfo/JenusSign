@@ -5,8 +5,9 @@ import { motion } from 'framer-motion'
 import SignatureEvidenceCard from './SignatureEvidenceCard'
 import SignatureCelebrationPopup from './SignatureCelebrationPopup'
 import MobileFriendlyPdfViewer from './MobileFriendlyPdfViewer'
-import DocumentCarousel from './DocumentCarousel'
+import DocumentCarousel from './DocumentCarouselV2'
 import { envelopesApi } from '../../../api/envelopeMockApi'
+import SignatureCapture from './SignatureCapture'
 
 import {
   ArrowLeft,
@@ -46,6 +47,12 @@ const CustomerProposalSignPage = () => {
 
   // Consent state
   const [checkedConsents, setCheckedConsents] = useState({})
+
+  const [signatureData, setSignatureData] = useState({
+    hasSignature: false,
+    dataUrl: null,
+    method: null,
+  })
 
   // Signature state
   const [activeSigTab, setActiveSigTab] = useState('draw') // 'draw' | 'upload'

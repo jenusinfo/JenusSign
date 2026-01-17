@@ -3,6 +3,7 @@ using JenusSign.Application.DTOs;
 using JenusSign.Core.Entities;
 using JenusSign.Core.Enums;
 using JenusSign.Core.Interfaces;
+using System.Linq.Expressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -35,29 +36,26 @@ public class UsersController : ControllerBase
         [FromQuery] UserRole? role = null,
         [FromQuery] string? search = null)
     {
-        var users = await _unitOfWork.Users.GetAllAsync();
-        var query = users.AsQueryable();
+        var searchLower = search?.ToLowerInvariant();
 
-        if (role.HasValue)
-            query = query.Where(u => u.Role == role.Value);
+        var predicate = (Expression<Func<User, bool>>)(u =>
+            (!role.HasValue || u.Role == role.Value) &&
+            (string.IsNullOrWhiteSpace(searchLower) ||
+                u.Email.ToLower().Contains(searchLower) ||
+                u.FirstName.ToLower().Contains(searchLower) ||
+                u.LastName.ToLower().Contains(searchLower) ||
+                u.BusinessKey.ToLower().Contains(searchLower)));
 
-        if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(u => 
-                u.Email.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                u.FirstName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                u.LastName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                u.BusinessKey.Contains(search, StringComparison.OrdinalIgnoreCase));
+        var totalCount = await _unitOfWork.Users.CountAsync(predicate);
 
-        var totalCount = query.Count();
-        var pagedUsers = query
-            .OrderBy(u => u.Role)
-            .ThenBy(u => u.LastName)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+        var users = await _unitOfWork.Users.GetAllAsync(
+            predicate: predicate,
+            orderBy: q => q.OrderBy(u => u.Role).ThenBy(u => u.LastName),
+            page: page,
+            pageSize: pageSize);
 
         return Ok(new UserListResponse(
-            Users: _mapper.Map<IEnumerable<UserDto>>(pagedUsers),
+            Users: _mapper.Map<IEnumerable<UserDto>>(users),
             TotalCount: totalCount,
             Page: page,
             PageSize: pageSize

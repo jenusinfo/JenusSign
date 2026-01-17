@@ -9,7 +9,13 @@ namespace JenusSign.Core.Interfaces;
 public interface IRepository<T> where T : BaseEntity
 {
     Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<IEnumerable<T>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<T>> GetAllAsync(
+        Expression<Func<T, bool>>? predicate = null,
+        Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null,
+        int? page = null,
+        int? pageSize = null,
+        IEnumerable<Expression<Func<T, object>>>? includes = null,
+        CancellationToken cancellationToken = default);
     Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
     Task<T> AddAsync(T entity, CancellationToken cancellationToken = default);
     Task UpdateAsync(T entity, CancellationToken cancellationToken = default);

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Linq.Expressions;
 using AutoMapper;
 using JenusSign.Application.DTOs;
 using JenusSign.Core.Entities;
@@ -49,7 +50,35 @@ public class CustomersController : ControllerBase
         }
         else // Admin or Employee see all
         {
-            customers = await _unitOfWork.Customers.GetAllAsync();
+            // Apply server-side filtering/paging
+            var searchLower = search?.ToLowerInvariant();
+
+            Expression<Func<Customer, bool>> predicate = c => true;
+
+            if (!string.IsNullOrWhiteSpace(searchLower))
+            {
+                predicate = c =>
+                    c.FirstName.ToLower().Contains(searchLower) ||
+                    c.LastName.ToLower().Contains(searchLower) ||
+                    c.Email.ToLower().Contains(searchLower) ||
+                    c.BusinessKey.ToLower().Contains(searchLower) ||
+                    (!string.IsNullOrEmpty(c.CompanyName) && c.CompanyName.ToLower().Contains(searchLower));
+            }
+
+            var adminTotalCount = await _unitOfWork.Customers.CountAsync(predicate);
+
+            var results = await _unitOfWork.Customers.GetAllAsync(
+                predicate: predicate,
+                orderBy: q => q.OrderByDescending(c => c.CreatedAt),
+                page: page,
+                pageSize: pageSize);
+
+            return Ok(new CustomerListResponse(
+                Customers: _mapper.Map<IEnumerable<CustomerDto>>(results),
+                TotalCount: adminTotalCount,
+                Page: page,
+                PageSize: pageSize
+            ));
         }
 
         var query = customers.AsQueryable();

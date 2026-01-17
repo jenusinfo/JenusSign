@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Linq.Expressions;
 using AutoMapper;
 using JenusSign.Application.DTOs;
 using JenusSign.Core.Entities;
@@ -46,48 +47,39 @@ public class ProposalsController : ControllerBase
         [FromQuery] string? search = null)
     {
         var (userId, role, _) = GetCurrentUserContext();
+        // Use repo query to filter/paginate in the database
+        var searchLower = search?.ToLowerInvariant();
+        var isAgent = role == UserRole.Agent;
+        var isBroker = role == UserRole.Broker;
 
-        IEnumerable<Proposal> proposals;
+        Expression<Func<Proposal, bool>> predicate = p =>
+            (!isAgent || p.AgentId == userId) &&
+            (!isBroker || (p.Agent != null && p.Agent.BrokerId == userId)) &&
+            (!status.HasValue || p.Status == status.Value) &&
+            (!type.HasValue || p.ProposalType == type.Value) &&
+            (string.IsNullOrWhiteSpace(searchLower) ||
+                p.ReferenceNumber.ToLower().Contains(searchLower) ||
+                p.BusinessKey.ToLower().Contains(searchLower) ||
+                p.Title.ToLower().Contains(searchLower) ||
+                (p.Customer != null && p.Customer.DisplayName.ToLower().Contains(searchLower)));
 
-        if (role == UserRole.Agent)
+        var includes = new Expression<Func<Proposal, object>>[]
         {
-            proposals = await _unitOfWork.Proposals.GetByAgentIdAsync(userId);
-        }
-        else if (role == UserRole.Broker)
-        {
-            proposals = await _unitOfWork.Proposals.GetByBrokerIdAsync(userId);
-        }
-        else
-        {
-            proposals = await _unitOfWork.Proposals.GetAllAsync();
-        }
+            p => p.Customer,
+            p => p.Agent
+        };
 
-        var query = proposals.AsQueryable();
+        var totalCount = await _unitOfWork.Proposals.CountAsync(predicate);
 
-        if (status.HasValue)
-            query = query.Where(p => p.Status == status.Value);
-
-        if (type.HasValue)
-            query = query.Where(p => p.ProposalType == type.Value);
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            query = query.Where(p =>
-                p.ReferenceNumber.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                p.BusinessKey.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                p.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                p.Customer.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase));
-        }
-
-        var totalCount = query.Count();
-        var pagedProposals = query
-            .OrderByDescending(p => p.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+        var proposals = await _unitOfWork.Proposals.GetAllAsync(
+            predicate: predicate,
+            orderBy: q => q.OrderByDescending(p => p.CreatedAt),
+            page: page,
+            pageSize: pageSize,
+            includes: includes);
 
         return Ok(new ProposalListResponse(
-            Proposals: _mapper.Map<IEnumerable<ProposalDto>>(pagedProposals),
+            Proposals: _mapper.Map<IEnumerable<ProposalDto>>(proposals),
             TotalCount: totalCount,
             Page: page,
             PageSize: pageSize

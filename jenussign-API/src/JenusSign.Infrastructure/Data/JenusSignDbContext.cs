@@ -1,4 +1,6 @@
 using JenusSign.Core.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace JenusSign.Infrastructure.Data;
@@ -6,13 +8,13 @@ namespace JenusSign.Infrastructure.Data;
 /// <summary>
 /// Entity Framework DbContext for JenusSign
 /// </summary>
-public class JenusSignDbContext : DbContext
+public class JenusSignDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
 {
     public JenusSignDbContext(DbContextOptions<JenusSignDbContext> options) : base(options)
     {
     }
 
-    public DbSet<User> Users => Set<User>();
+    public new DbSet<User> Users => Set<User>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Proposal> Proposals => Set<Proposal>();
     public DbSet<Envelope> Envelopes => Set<Envelope>();
@@ -27,23 +29,21 @@ public class JenusSignDbContext : DbContext
         // User configuration
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Email).IsUnique();
             entity.HasIndex(e => e.BusinessKey).IsUnique();
-            
+
             entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
-            entity.Property(e => e.PasswordHash).IsRequired();
             entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.BusinessKey).IsRequired().HasMaxLength(20);
             entity.Property(e => e.Phone).HasMaxLength(20);
-            
+
             // Self-referencing relationship: Agent -> Broker
             entity.HasOne(e => e.Broker)
                 .WithMany(e => e.Agents)
                 .HasForeignKey(e => e.BrokerId)
                 .OnDelete(DeleteBehavior.Restrict);
-            
+
             // Soft delete filter
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
@@ -203,8 +203,26 @@ public class JenusSignDbContext : DbContext
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var entries = ChangeTracker.Entries<BaseEntity>();
-        
         foreach (var entry in entries)
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    entry.Entity.CreatedAt = DateTime.UtcNow;
+                    break;
+                case EntityState.Modified:
+                    entry.Entity.UpdatedAt = DateTime.UtcNow;
+                    break;
+                case EntityState.Deleted:
+                    entry.State = EntityState.Modified;
+                    entry.Entity.IsDeleted = true;
+                    entry.Entity.DeletedAt = DateTime.UtcNow;
+                    break;
+            }
+        }
+
+        var userEntries = ChangeTracker.Entries<User>();
+        foreach (var entry in userEntries)
         {
             switch (entry.State)
             {

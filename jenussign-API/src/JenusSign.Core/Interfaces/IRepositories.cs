@@ -6,7 +6,7 @@ namespace JenusSign.Core.Interfaces;
 /// <summary>
 /// Generic repository interface
 /// </summary>
-public interface IRepository<T> where T : BaseEntity
+public interface IRepository<T> where T : class
 {
     Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IEnumerable<T>> GetAllAsync(

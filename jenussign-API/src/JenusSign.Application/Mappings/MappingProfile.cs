@@ -13,9 +13,21 @@ public class MappingProfile : Profile
     {
         // User mappings
         CreateMap<User, UserDto>()
-            .ForMember(d => d.FullName, opt => opt.MapFrom(s => s.FullName))
-            .ForMember(d => d.BrokerName, opt => opt.MapFrom(s => s.Broker != null ? s.Broker.FullName : null))
-            .ForMember(d => d.BrokerBusinessKey, opt => opt.MapFrom(s => s.Broker != null ? s.Broker.BusinessKey : null));
+            .ConstructUsing(s => new UserDto(
+                s.Id,
+                s.BusinessKey,
+                s.Email ?? string.Empty,
+                s.FirstName ?? string.Empty,
+                s.LastName ?? string.Empty,
+                s.FullName,
+                s.Phone,
+                s.Role,
+                s.IsActive,
+                s.BrokerId,
+                s.Broker != null ? s.Broker.FullName : null,
+                s.Broker != null ? s.Broker.BusinessKey : null,
+                s.CreatedAt,
+                s.LastLoginAt));
 
         CreateMap<CreateUserRequest, User>()
             .ForMember(d => d.Id, opt => opt.Ignore())

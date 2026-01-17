@@ -9,7 +9,7 @@ namespace JenusSign.Infrastructure.Repositories;
 /// <summary>
 /// Generic repository implementation
 /// </summary>
-public class Repository<T> : IRepository<T> where T : BaseEntity
+public class Repository<T> : IRepository<T> where T : class
 {
     protected readonly JenusSignDbContext _context;
     protected readonly DbSet<T> _dbSet;

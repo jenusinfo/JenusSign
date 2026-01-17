@@ -3,9 +3,11 @@ using JenusSign.Application.DTOs;
 using JenusSign.Core.Entities;
 using JenusSign.Core.Enums;
 using JenusSign.Core.Interfaces;
-using System.Linq.Expressions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace JenusSign.API.Controllers;
 
@@ -17,12 +19,18 @@ public class UsersController : ControllerBase
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly ILogger<UsersController> _logger;
+    private readonly UserManager<User> _userManager;
 
-    public UsersController(IUnitOfWork unitOfWork, IMapper mapper, ILogger<UsersController> logger)
+    public UsersController(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        ILogger<UsersController> logger,
+        UserManager<User> userManager)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _logger = logger;
+        _userManager = userManager;
     }
 
     /// <summary>
@@ -36,15 +44,15 @@ public class UsersController : ControllerBase
         [FromQuery] UserRole? role = null,
         [FromQuery] string? search = null)
     {
-        var searchLower = search?.ToLowerInvariant();
+        var searchLower = (search ?? string.Empty).ToLowerInvariant();
 
         var predicate = (Expression<Func<User, bool>>)(u =>
             (!role.HasValue || u.Role == role.Value) &&
             (string.IsNullOrWhiteSpace(searchLower) ||
-                u.Email.ToLower().Contains(searchLower) ||
-                u.FirstName.ToLower().Contains(searchLower) ||
-                u.LastName.ToLower().Contains(searchLower) ||
-                u.BusinessKey.ToLower().Contains(searchLower)));
+                (u.Email ?? string.Empty).ToLower().Contains(searchLower) ||
+                (u.FirstName ?? string.Empty).ToLower().Contains(searchLower) ||
+                (u.LastName ?? string.Empty).ToLower().Contains(searchLower) ||
+                (u.BusinessKey ?? string.Empty).ToLower().Contains(searchLower)));
 
         var totalCount = await _unitOfWork.Users.CountAsync(predicate);
 
@@ -68,7 +76,7 @@ public class UsersController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<UserDto>> GetUser(Guid id)
     {
-        var user = await _unitOfWork.Users.GetByIdAsync(id);
+        var user = await _userManager.FindByIdAsync(id.ToString());
         if (user == null)
             return NotFound();
 
@@ -95,17 +103,21 @@ public class UsersController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<UserDto>> CreateUser([FromBody] CreateUserRequest request)
     {
-        // Check if email already exists
-        var existingUser = await _unitOfWork.Users.GetByEmailAsync(request.Email);
+        var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser != null)
             return BadRequest(new { message = "Email already exists" });
 
         var user = _mapper.Map<User>(request);
-        user.BusinessKey = await _unitOfWork.Users.GenerateBusinessKeyAsync(request.Role);
-        user.PasswordHash = AuthController.HashPassword(request.Password);
+        user.UserName = request.Email;
+        user.Role = request.Role;
 
-        await _unitOfWork.Users.AddAsync(user);
-        await _unitOfWork.SaveChangesAsync();
+        var createResult = await _userManager.CreateAsync(user, request.Password);
+        if (!createResult.Succeeded)
+        {
+            return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
+        }
+
+        await _userManager.AddToRoleAsync(user, user.Role.ToString());
 
         _logger.LogInformation("User {BusinessKey} created by admin", user.BusinessKey);
 
@@ -119,7 +131,7 @@ public class UsersController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<UserDto>> UpdateUser(Guid id, [FromBody] UpdateUserRequest request)
     {
-        var user = await _unitOfWork.Users.GetByIdAsync(id);
+        var user = await _userManager.FindByIdAsync(id.ToString());
         if (user == null)
             return NotFound();
 
@@ -129,8 +141,11 @@ public class UsersController : ControllerBase
         if (request.IsActive.HasValue) user.IsActive = request.IsActive.Value;
         if (request.BrokerId.HasValue) user.BrokerId = request.BrokerId;
 
-        await _unitOfWork.Users.UpdateAsync(user);
-        await _unitOfWork.SaveChangesAsync();
+        var updateResult = await _userManager.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+        {
+            return BadRequest(new { message = string.Join("; ", updateResult.Errors.Select(e => e.Description)) });
+        }
 
         return Ok(_mapper.Map<UserDto>(user));
     }

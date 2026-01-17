@@ -1,9 +1,8 @@
-using System.Security.Cryptography;
-using System.Text;
 using AutoMapper;
 using JenusSign.Application.DTOs;
 using JenusSign.Core.Entities;
 using JenusSign.Core.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,17 +14,23 @@ public class AuthController : ControllerBase
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITokenService _tokenService;
+    private readonly UserManager<User> _userManager;
+    private readonly SignInManager<User> _signInManager;
     private readonly IMapper _mapper;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IUnitOfWork unitOfWork,
         ITokenService tokenService,
+        UserManager<User> userManager,
+        SignInManager<User> signInManager,
         IMapper mapper,
         ILogger<AuthController> logger)
     {
         _unitOfWork = unitOfWork;
         _tokenService = tokenService;
+        _userManager = userManager;
+        _signInManager = signInManager;
         _mapper = mapper;
         _logger = logger;
     }
@@ -37,14 +42,15 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
-        var user = await _unitOfWork.Users.GetByEmailAsync(request.Email);
-        
-        if (user == null || !user.IsActive)
+        var user = await _userManager.FindByEmailAsync(request.Email);
+
+        if (user == null || !user.IsActive || user.IsDeleted)
         {
             return Unauthorized(new { message = "Invalid email or password" });
         }
 
-        if (!VerifyPassword(request.Password, user.PasswordHash))
+        var signInResult = await _signInManager.CheckPasswordSignInAsync(user, request.Password, false);
+        if (!signInResult.Succeeded)
         {
             return Unauthorized(new { message = "Invalid email or password" });
         }
@@ -57,8 +63,7 @@ public class AuthController : ControllerBase
         user.RefreshToken = refreshToken;
         user.RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(7);
         user.LastLoginAt = DateTime.UtcNow;
-        await _unitOfWork.Users.UpdateAsync(user);
-        await _unitOfWork.SaveChangesAsync();
+        await _userManager.UpdateAsync(user);
 
         _logger.LogInformation("User {Email} logged in successfully", user.Email);
 
@@ -130,26 +135,12 @@ public class AuthController : ControllerBase
             return Unauthorized();
         }
 
-        var user = await _unitOfWork.Users.GetByIdAsync(id);
+        var user = await _userManager.FindByIdAsync(userId!);
         if (user == null)
         {
             return NotFound();
         }
 
         return Ok(_mapper.Map<UserDto>(user));
-    }
-
-    private static bool VerifyPassword(string password, string hash)
-    {
-        var computedHash = HashPassword(password);
-        return computedHash == hash;
-    }
-
-    public static string HashPassword(string password)
-    {
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(password);
-        var hash = sha256.ComputeHash(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

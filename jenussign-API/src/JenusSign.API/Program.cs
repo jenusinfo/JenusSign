@@ -1,5 +1,7 @@
 using System.Text;
 using JenusSign.Application.Mappings;
+using JenusSign.Core.Entities;
+using JenusSign.Core.Enums;
 using JenusSign.Core.Interfaces;
 using JenusSign.Infrastructure.Data;
 using JenusSign.Infrastructure.Repositories;
@@ -9,6 +11,7 @@ using JenusSign.Infrastructure.Services.Pdf;
 using JenusSign.Infrastructure.Services.Signing;
 using JenusSign.Infrastructure.Services.Sms;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -45,6 +48,21 @@ builder.Services.AddDbContext<JenusSignDbContext>(options =>
         });
     }
 });
+
+// Identity
+builder.Services.AddIdentityCore<User>(options =>
+{
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireDigit = false;
+    options.Password.RequiredLength = 6;
+    options.User.RequireUniqueEmail = true;
+})
+    .AddRoles<IdentityRole<Guid>>()
+    .AddEntityFrameworkStores<JenusSignDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
 
 // Repositories
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -206,7 +224,9 @@ if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<JenusSignDbContext>();
-    await SeedDemoDataAsync(context);
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+    await SeedDemoDataAsync(context, userManager, roleManager);
 }
 
 Log.Information("JenusSign API starting on {Urls}", string.Join(", ", app.Urls));
@@ -214,74 +234,107 @@ Log.Information("JenusSign API starting on {Urls}", string.Join(", ", app.Urls))
 app.Run();
 
 // Demo data seeding
-static async Task SeedDemoDataAsync(JenusSignDbContext context)
+static async Task SeedDemoDataAsync(
+    JenusSignDbContext context,
+    UserManager<User> userManager,
+    RoleManager<IdentityRole<Guid>> roleManager)
 {
     if (await context.Users.AnyAsync())
         return;
 
-    // Create demo users matching frontend mock data
-    var admin = new JenusSign.Core.Entities.User
+    var roles = new[]
+    {
+        UserRole.Admin,
+        UserRole.Employee,
+        UserRole.Broker,
+        UserRole.Agent
+    };
+
+    foreach (var role in roles)
+    {
+        var roleName = role.ToString();
+        if (!await roleManager.RoleExistsAsync(roleName))
+        {
+            await roleManager.CreateAsync(new IdentityRole<Guid>(roleName));
+        }
+    }
+
+    var admin = new User
     {
         BusinessKey = "ADM-001",
         Email = "admin@insurance.com",
-        PasswordHash = JenusSign.API.Controllers.AuthController.HashPassword("admin123"),
+        UserName = "admin@insurance.com",
         FirstName = "Admin",
         LastName = "User",
-        Role = JenusSign.Core.Enums.UserRole.Admin,
-        IsActive = true
+        Role = UserRole.Admin,
+        IsActive = true,
+        EmailConfirmed = true
     };
 
-    var broker = new JenusSign.Core.Entities.User
+    var broker = new User
     {
         BusinessKey = "BRK-001",
         Email = "broker@insurance.com",
-        PasswordHash = JenusSign.API.Controllers.AuthController.HashPassword("broker123"),
+        UserName = "broker@insurance.com",
         FirstName = "John",
         LastName = "Broker",
-        Role = JenusSign.Core.Enums.UserRole.Broker,
-        IsActive = true
+        Role = UserRole.Broker,
+        IsActive = true,
+        EmailConfirmed = true
     };
 
-    var employee = new JenusSign.Core.Entities.User
-    {
-        BusinessKey = "EMP-001",
-        Email = "employee@insurance.com",
-        PasswordHash = JenusSign.API.Controllers.AuthController.HashPassword("employee123"),
-        FirstName = "Employee",
-        LastName = "User",
-        Role = JenusSign.Core.Enums.UserRole.Employee,
-        IsActive = true
-    };
-
-    context.Users.AddRange(admin, broker, employee);
-    await context.SaveChangesAsync();
-
-    var agent1 = new JenusSign.Core.Entities.User
+    var agent1 = new User
     {
         BusinessKey = "AGT-001",
         Email = "agent@insurance.com",
-        PasswordHash = JenusSign.API.Controllers.AuthController.HashPassword("agent123"),
+        UserName = "agent@insurance.com",
         FirstName = "Sarah",
         LastName = "Agent",
-        Role = JenusSign.Core.Enums.UserRole.Agent,
-        BrokerId = broker.Id,
-        IsActive = true
+        Role = UserRole.Agent,
+        IsActive = true,
+        EmailConfirmed = true
     };
 
-    var agent2 = new JenusSign.Core.Entities.User
+    var agent2 = new User
     {
         BusinessKey = "AGT-002",
         Email = "agent2@insurance.com",
-        PasswordHash = JenusSign.API.Controllers.AuthController.HashPassword("agent123"),
+        UserName = "agent2@insurance.com",
         FirstName = "Mike",
         LastName = "Agent",
-        Role = JenusSign.Core.Enums.UserRole.Agent,
-        BrokerId = broker.Id,
-        IsActive = true
+        Role = UserRole.Agent,
+        IsActive = true,
+        EmailConfirmed = true
     };
 
-    context.Users.AddRange(agent1, agent2);
-    await context.SaveChangesAsync();
+    var employee = new User
+    {
+        BusinessKey = "EMP-001",
+        Email = "employee@insurance.com",
+        UserName = "employee@insurance.com",
+        FirstName = "Employee",
+        LastName = "User",
+        Role = UserRole.Employee,
+        IsActive = true,
+        EmailConfirmed = true
+    };
+
+    await userManager.CreateAsync(admin, "admin123");
+    await userManager.AddToRoleAsync(admin, admin.Role.ToString());
+
+    await userManager.CreateAsync(broker, "broker123");
+    await userManager.AddToRoleAsync(broker, broker.Role.ToString());
+
+    agent1.BrokerId = broker.Id;
+    await userManager.CreateAsync(agent1, "agent123");
+    await userManager.AddToRoleAsync(agent1, agent1.Role.ToString());
+
+    agent2.BrokerId = broker.Id;
+    await userManager.CreateAsync(agent2, "agent123");
+    await userManager.AddToRoleAsync(agent2, agent2.Role.ToString());
+
+    await userManager.CreateAsync(employee, "employee123");
+    await userManager.AddToRoleAsync(employee, employee.Role.ToString());
 
     // Create demo customers
     var customer1 = new JenusSign.Core.Entities.Customer
@@ -392,3 +445,5 @@ static async Task SeedDemoDataAsync(JenusSignDbContext context)
 
     Log.Information("Demo data seeded successfully");
 }
+
+public partial class Program { }

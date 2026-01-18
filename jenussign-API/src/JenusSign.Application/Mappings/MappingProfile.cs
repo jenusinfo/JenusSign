@@ -79,5 +79,27 @@ public class MappingProfile : Profile
         CreateMap<Proposal, DocumentInfoDto>()
             .ForMember(d => d.Pages, opt => opt.MapFrom(s => s.DocumentPages))
             .ForMember(d => d.DownloadUrl, opt => opt.Ignore());
+
+        // Customer proposal mapping (for customer portal)
+        CreateMap<Proposal, CustomerProposalDto>()
+            .ForMember(d => d.AgentName, opt => opt.MapFrom(s => s.Agent.FullName))
+            .ForMember(d => d.AgentPhone, opt => opt.MapFrom(s => s.Agent.Phone))
+            .ForMember(d => d.AgentEmail, opt => opt.MapFrom(s => s.Agent.Email))
+            .ForMember(d => d.SigningUrl, opt => opt.Ignore()); // Set in controller
+
+        // Envelope mappings
+        CreateMap<Envelope, EnvelopeDto>()
+            .ForMember(d => d.CustomerName, opt => opt.MapFrom(s => s.Customer.DisplayName))
+            .ForMember(d => d.CustomerBusinessKey, opt => opt.MapFrom(s => s.Customer.BusinessKey))
+            .ForMember(d => d.AgentName, opt => opt.MapFrom(s => s.Agent.FullName))
+            .ForMember(d => d.AgentBusinessKey, opt => opt.MapFrom(s => s.Agent.BusinessKey))
+            .ForMember(d => d.Documents, opt => opt.MapFrom(s => s.Documents));
+
+        CreateMap<CreateEnvelopeRequest, Envelope>()
+            .ForMember(d => d.Id, opt => opt.Ignore())
+            .ForMember(d => d.BusinessKey, opt => opt.Ignore())
+            .ForMember(d => d.AgentId, opt => opt.Ignore())
+            .ForMember(d => d.Status, opt => opt.MapFrom(_ => Core.Enums.ProposalStatus.Draft))
+            .ForMember(d => d.CreatedAt, opt => opt.Ignore());
     }
 }

@@ -221,8 +221,13 @@ public interface IDocumentStorageService
 /// </summary>
 public interface ITokenService
 {
+    // User (Agent/Broker/Admin) token methods
     string GenerateAccessToken(User user);
     string GenerateRefreshToken();
     Task<(string AccessToken, string RefreshToken)> RefreshTokensAsync(string refreshToken, CancellationToken cancellationToken = default);
     bool ValidateToken(string token);
+    
+    // Customer token methods
+    string GenerateCustomerAccessToken(Customer customer);
+    Task<(string AccessToken, string RefreshToken)> RefreshCustomerTokensAsync(string refreshToken, CancellationToken cancellationToken = default);
 }

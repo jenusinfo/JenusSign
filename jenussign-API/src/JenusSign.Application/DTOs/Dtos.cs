@@ -339,3 +339,194 @@ public record RecentActivityDto(
     DateTime Timestamp,
     string? Reference
 );
+
+// ==================== Customer Auth DTOs ====================
+
+public record CustomerOtpRequest(
+    string? Email,
+    string? Phone
+);
+
+public record CustomerOtpResponse(
+    bool Success,
+    string MaskedDestination,
+    OtpChannel Channel,
+    DateTime ExpiresAt,
+    string OtpToken,
+    string? Message
+);
+
+public record CustomerVerifyOtpRequest(
+    string OtpToken,
+    string Code
+);
+
+public record CustomerLoginResponse(
+    bool Success,
+    string AccessToken,
+    string RefreshToken,
+    CustomerDto? Customer,
+    DateTime ExpiresAt
+);
+
+// ==================== Customer Proposal DTOs ====================
+
+public record CustomerProposalDto(
+    Guid Id,
+    string BusinessKey,
+    string ReferenceNumber,
+    string Title,
+    string? Description,
+    ProposalType ProposalType,
+    ProposalStatus Status,
+    decimal? Premium,
+    string Currency,
+    DateTime? ValidUntil,
+    string AgentName,
+    string? AgentPhone,
+    string? AgentEmail,
+    DateTime CreatedAt,
+    string? SigningUrl
+);
+
+public record CustomerProposalListResponse(
+    IEnumerable<CustomerProposalDto> Proposals,
+    int TotalCount,
+    int Page,
+    int PageSize
+);
+
+public record CustomerProposalSummaryDto(
+    int TotalProposals,
+    int PendingSignature,
+    int Signed,
+    int ExpiringSoon
+);
+
+// ==================== Envelope DTOs ====================
+
+public record EnvelopeDto(
+    Guid Id,
+    string BusinessKey,
+    string Name,
+    string? Description,
+    ProposalStatus Status,
+    Guid CustomerId,
+    string CustomerName,
+    string CustomerBusinessKey,
+    Guid AgentId,
+    string AgentName,
+    string AgentBusinessKey,
+    int DocumentCount,
+    IEnumerable<DocumentInfoDto> Documents,
+    DateTime? ExpiresAt,
+    string? CustomerMessage,
+    DateTime CreatedAt
+);
+
+public record CreateEnvelopeRequest(
+    string Name,
+    string? Description,
+    Guid CustomerId,
+    string? CustomerMessage,
+    DateTime? ExpiresAt
+);
+
+public record UpdateEnvelopeRequest(
+    string? Name,
+    string? Description,
+    string? CustomerMessage,
+    DateTime? ExpiresAt
+);
+
+public record AddDocumentToEnvelopeRequest(
+    Guid ProposalId
+);
+
+public record SendEnvelopeRequest(
+    string? CustomerMessage,
+    DateTime? ExpiresAt,
+    bool SendEmail = true,
+    bool SendSms = false
+);
+
+public record EnvelopeListResponse(
+    IEnumerable<EnvelopeDto> Envelopes,
+    int TotalCount,
+    int Page,
+    int PageSize
+);
+
+public record EnvelopeSigningInfoDto(
+    Guid EnvelopeId,
+    string BusinessKey,
+    string Name,
+    string? Description,
+    string CustomerName,
+    string CustomerEmail,
+    ProposalStatus Status,
+    DateTime? ExpiresAt,
+    IEnumerable<DocumentInfoDto> Documents,
+    string? CustomerMessage,
+    bool IdentityVerified,
+    bool OtpVerified,
+    bool CanSign
+);
+
+// ==================== Settings DTOs ====================
+
+public record SystemSettingsDto(
+    string CompanyName,
+    string SupportEmail,
+    string BaseUrl,
+    int SigningLinkExpiryDays,
+    int OtpExpiryMinutes,
+    int MaxOtpAttempts,
+    bool EnableSmsNotifications,
+    bool EnableEmailNotifications,
+    string DefaultCurrency,
+    string TimestampAuthority,
+    bool KeyVaultConfigured,
+    SystemStatsDto Stats
+);
+
+public record SystemStatsDto(
+    int TotalUsers,
+    int TotalCustomers,
+    int TotalProposals,
+    int TotalSigned
+);
+
+public record UpdateSettingsRequest(
+    string? CompanyName,
+    string? SupportEmail,
+    int? SigningLinkExpiryDays,
+    int? OtpExpiryMinutes,
+    bool? EnableSmsNotifications,
+    bool? EnableEmailNotifications
+);
+
+public record ConsentDefinitionDto(
+    Guid Id,
+    string Code,
+    string Title,
+    string Description,
+    bool Required,
+    string? Url,
+    string Category,
+    int Order
+);
+
+public record EnumValueDto(
+    int Value,
+    string Name,
+    string DisplayName
+);
+
+public record HealthStatusDto(
+    string Status,
+    string Database,
+    DateTime Timestamp,
+    string Version
+);
+

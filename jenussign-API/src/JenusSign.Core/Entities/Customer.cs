@@ -43,6 +43,11 @@ public class Customer : BaseEntityWithBusinessKey
     public Guid AgentId { get; set; }
     public User Agent { get; set; } = null!;
     
+    // Customer portal authentication
+    public string? RefreshToken { get; set; }
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+    
     // Proposals for this customer
     public ICollection<Proposal> Proposals { get; set; } = new List<Proposal>();
     

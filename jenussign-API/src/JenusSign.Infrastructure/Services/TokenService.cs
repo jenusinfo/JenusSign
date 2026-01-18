@@ -107,4 +107,50 @@ public class TokenService : ITokenService
             return false;
         }
     }
+
+    public string GenerateCustomerAccessToken(Customer customer)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim("CustomerId", customer.Id.ToString()),
+            new Claim(ClaimTypes.Email, customer.Email),
+            new Claim(ClaimTypes.Name, customer.DisplayName),
+            new Claim("BusinessKey", customer.BusinessKey),
+            new Claim("TokenType", "Customer")
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: _issuer,
+            audience: $"{_audience}-Customer",
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(24), // Customer tokens last 24 hours
+            signingCredentials: credentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public async Task<(string AccessToken, string RefreshToken)> RefreshCustomerTokensAsync(string refreshToken, CancellationToken cancellationToken = default)
+    {
+        // Customer refresh tokens would be stored in a separate mechanism
+        // For now, we'll validate against the customer's stored token
+        var customers = await _unitOfWork.Customers.FindAsync(c => c.RefreshToken == refreshToken, cancellationToken);
+        var customer = customers.FirstOrDefault();
+
+        if (customer == null || customer.RefreshTokenExpiresAt < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Invalid or expired refresh token");
+
+        var newAccessToken = GenerateCustomerAccessToken(customer);
+        var newRefreshToken = GenerateRefreshToken();
+
+        customer.RefreshToken = newRefreshToken;
+        customer.RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(_refreshTokenDays);
+        await _unitOfWork.Customers.UpdateAsync(customer, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return (newAccessToken, newRefreshToken);
+    }
 }

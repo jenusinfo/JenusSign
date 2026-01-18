@@ -42,39 +42,44 @@ public enum ProposalStatus
     PendingReview = 2,
     
     /// <summary>
+    /// Customer has viewed the document
+    /// </summary>
+    Viewed = 3,
+    
+    /// <summary>
     /// Customer is reviewing the document
     /// </summary>
-    UnderReview = 3,
+    UnderReview = 4,
     
     /// <summary>
     /// Awaiting customer signature
     /// </summary>
-    PendingSignature = 4,
+    PendingSignature = 5,
     
     /// <summary>
     /// OTP sent, awaiting verification
     /// </summary>
-    AwaitingOtp = 5,
+    AwaitingOtp = 6,
     
     /// <summary>
     /// Successfully signed
     /// </summary>
-    Signed = 6,
+    Signed = 7,
     
     /// <summary>
     /// Rejected by customer
     /// </summary>
-    Rejected = 7,
+    Rejected = 8,
     
     /// <summary>
     /// Proposal expired without action
     /// </summary>
-    Expired = 8,
+    Expired = 9,
     
     /// <summary>
     /// Cancelled by agent/broker
     /// </summary>
-    Cancelled = 9
+    Cancelled = 10
 }
 
 /// <summary>
@@ -84,10 +89,13 @@ public enum ProposalType
 {
     Motor = 1,
     Home = 2,
-    Life = 3,
-    Health = 4,
-    Travel = 5,
-    Business = 6,
+    Property = 3,
+    Life = 4,
+    Health = 5,
+    Travel = 6,
+    Marine = 7,
+    Liability = 8,
+    Business = 9,
     Other = 99
 }
 
@@ -175,4 +183,25 @@ public enum ConsentAction
     OtpVerified = 6,
     SignatureCompleted = 7,
     DocumentRejected = 8
+}
+
+/// <summary>
+/// Purpose of OTP code
+/// </summary>
+public enum OtpPurpose
+{
+    /// <summary>
+    /// OTP for document signing verification
+    /// </summary>
+    Signing = 1,
+    
+    /// <summary>
+    /// OTP for customer portal login
+    /// </summary>
+    CustomerLogin = 2,
+    
+    /// <summary>
+    /// OTP for password reset
+    /// </summary>
+    PasswordReset = 3
 }

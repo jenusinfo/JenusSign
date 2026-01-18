@@ -112,23 +112,32 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidAudience = builder.Configuration["Jwt:Audience"] ?? "JenusSign",
         ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero
+        ClockSkew = TimeSpan.Zero,
+        // Allow multiple audiences for customer tokens
+        ValidAudiences = new[] 
+        { 
+            builder.Configuration["Jwt:Audience"] ?? "JenusSign",
+            $"{builder.Configuration["Jwt:Audience"] ?? "JenusSign"}-Customer"
+        }
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Policy for customer portal endpoints
+    options.AddPolicy("CustomerPolicy", policy =>
+        policy.RequireClaim("CustomerId"));
+});
 
 // CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(
-                builder.Configuration["Cors:AllowedOrigins"]?.Split(',') ?? 
-                new[] { "http://localhost:5173", "http://localhost:3000", "https://jenussign.jenusplanet.com" })
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+        policy.SetIsOriginAllowed(_ => true) // allows any origin dynamically
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
     });
 });
 

@@ -7,8 +7,19 @@ namespace JenusSign.Core.Entities;
 /// </summary>
 public class OtpCode : BaseEntity
 {
-    public Guid SigningSessionId { get; set; }
-    public SigningSession SigningSession { get; set; } = null!;
+    // For signing session OTPs
+    public Guid? SigningSessionId { get; set; }
+    public SigningSession? SigningSession { get; set; }
+    
+    // For customer login OTPs
+    public Guid? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
+    
+    // Token for identifying this OTP request (for customer login flow)
+    public string? Token { get; set; }
+    
+    // Purpose of this OTP
+    public OtpPurpose Purpose { get; set; } = OtpPurpose.Signing;
     
     public string Code { get; set; } = string.Empty;
     public string CodeHash { get; set; } = string.Empty; // Hashed version for security

@@ -21,64 +21,8 @@ import {
   Send,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-// Mock data
-const mockCustomers = {
-  'cust-001': {
-    id: 'cust-001',
-    firstName: 'Yiannis',
-    lastName: 'Kleanthous',
-    email: 'yiannis.kleanthous@hydrainsurance.com.cy',
-    phone: '+357 99 123 456',
-    mobile: '+357 99 123 456',
-    idNumber: 'X1234567',
-    idType: 'ID Card',
-    dateOfBirth: '1985-03-12',
-    address: '25 Makarios Avenue',
-    city: 'Nicosia',
-    postalCode: '1065',
-    country: 'Cyprus',
-    assignedAgent: { id: 'agent-001', name: 'Maria Georgiou' },
-    assignedEmployee: null,
-    createdAt: '2024-06-15T10:00:00Z',
-    envelopes: [
-      { id: 'env-001', reference: 'PR-2025-0001', title: 'Home Insurance', status: 'PENDING', date: '2025-01-15' },
-    ],
-  },
-  'cust-002': {
-    id: 'cust-002',
-    firstName: 'Charis',
-    lastName: 'Constantinou',
-    email: 'charis.constantinou@hydrainsurance.com.cy',
-    phone: '+357 99 654 321',
-    mobile: '+357 99 654 321',
-    idNumber: 'M7654321',
-    idType: 'ID Card',
-    dateOfBirth: '1990-07-22',
-    address: '18 Griva Digeni Avenue',
-    city: 'Limassol',
-    postalCode: '3106',
-    country: 'Cyprus',
-    assignedAgent: { id: 'agent-002', name: 'Andreas Papadopoulos' },
-    assignedEmployee: { id: 'emp-001', name: 'Elena Christodoulou' },
-    createdAt: '2024-08-20T14:30:00Z',
-    envelopes: [
-      { id: 'env-002', reference: 'PR-2025-0002', title: 'Motor Insurance', status: 'PENDING', date: '2025-01-14' },
-    ],
-  },
-}
-
-const mockAgents = [
-  { id: 'agent-001', name: 'Maria Georgiou' },
-  { id: 'agent-002', name: 'Andreas Papadopoulos' },
-  { id: 'agent-003', name: 'Elena Christodoulou' },
-]
-
-const mockEmployees = [
-  { id: 'emp-001', name: 'Elena Christodoulou' },
-  { id: 'emp-002', name: 'Nikos Stavrou' },
-  { id: 'emp-003', name: 'Anna Kyriakidou' },
-]
+import { customersApi } from '../../../api/customersApi'
+import { usersApi } from '../../../api/usersApi'
 
 const CustomerDetailPage = () => {
   const { id } = useParams()
@@ -87,17 +31,61 @@ const CustomerDetailPage = () => {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({})
+  const [agents, setAgents] = useState([])
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      const data = mockCustomers[id]
-      if (data) {
-        setCustomer(data)
-        setFormData(data)
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const [customerData, agentsData] = await Promise.all([
+          customersApi.getCustomer(id),
+          usersApi.getAgents(),
+        ])
+        
+        console.log('Customer data:', customerData)
+        
+        if (customerData) {
+          // Transform API response to match expected UI format
+          const transformed = {
+            id: customerData.id,
+            businessKey: customerData.businessKey,
+            firstName: customerData.firstName || '',
+            lastName: customerData.lastName || '',
+            companyName: customerData.companyName || '',
+            email: customerData.email || '',
+            phone: customerData.phone || '',
+            mobile: customerData.alternatePhone || customerData.phone || '',
+            idNumber: customerData.idNumber || '',
+            idType: customerData.idType || 'ID Card',
+            dateOfBirth: customerData.dateOfBirth,
+            address: customerData.address || '',
+            city: customerData.city || '',
+            postalCode: customerData.postalCode || '',
+            country: customerData.country || 'Cyprus',
+            customerType: customerData.customerType,
+            assignedAgent: customerData.agentId ? {
+              id: customerData.agentId,
+              name: customerData.agentName || '',
+            } : null,
+            createdAt: customerData.createdAt,
+            envelopes: [], // TODO: Fetch envelopes for this customer
+          }
+          setCustomer(transformed)
+          setFormData(transformed)
+        }
+        
+        setAgents(agentsData || [])
+      } catch (error) {
+        console.error('Failed to fetch customer:', error)
+        toast.error('Failed to load customer details')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
-    }, 500)
+    }
+
+    if (id) {
+      fetchData()
+    }
   }, [id])
 
   const handleChange = (e) => {
@@ -107,20 +95,31 @@ const CustomerDetailPage = () => {
 
   const handleAgentChange = (e) => {
     const agentId = e.target.value
-    const agent = agentId ? mockAgents.find(a => a.id === agentId) : null
-    setFormData({ ...formData, assignedAgent: agent })
+    const agent = agentId ? agents.find(a => a.id === agentId) : null
+    setFormData({ ...formData, assignedAgent: agent ? { id: agent.id, name: `${agent.firstName} ${agent.lastName}` } : null })
   }
 
-  const handleEmployeeChange = (e) => {
-    const employeeId = e.target.value
-    const employee = employeeId ? mockEmployees.find(emp => emp.id === employeeId) : null
-    setFormData({ ...formData, assignedEmployee: employee })
-  }
-
-  const handleSave = () => {
-    setCustomer(formData)
-    setEditing(false)
-    toast.success('Customer updated successfully')
+  const handleSave = async () => {
+    try {
+      await customersApi.updateCustomer(id, {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        alternatePhone: formData.mobile,
+        address: formData.address,
+        city: formData.city,
+        postalCode: formData.postalCode,
+        country: formData.country,
+        agentId: formData.assignedAgent?.id || null,
+      })
+      setCustomer(formData)
+      setEditing(false)
+      toast.success('Customer updated successfully')
+    } catch (error) {
+      console.error('Failed to update customer:', error)
+      toast.error('Failed to update customer')
+    }
   }
 
   const handleCancel = () => {
@@ -496,8 +495,8 @@ const CustomerDetailPage = () => {
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                   >
                     <option value="">Select Agent...</option>
-                    {mockAgents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>{agent.firstName} {agent.lastName}</option>
                     ))}
                   </select>
                 ) : (
@@ -522,12 +521,16 @@ const CustomerDetailPage = () => {
                 {editing ? (
                   <select
                     value={formData.assignedEmployee?.id || ''}
-                    onChange={handleEmployeeChange}
+                    onChange={(e) => {
+                      const employeeId = e.target.value
+                      const employee = employeeId ? agents.find(a => a.id === employeeId) : null
+                      setFormData({ ...formData, assignedEmployee: employee ? { id: employee.id, name: `${employee.firstName} ${employee.lastName}` } : null })
+                    }}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                   >
                     <option value="">None (Agent handles)</option>
-                    {mockEmployees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    {agents.map((emp) => (
+                      <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>
                     ))}
                   </select>
                 ) : customer.assignedEmployee ? (

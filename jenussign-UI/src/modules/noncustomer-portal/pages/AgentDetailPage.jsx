@@ -18,53 +18,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const mockAgents = {
-  'agent-001': {
-    id: 'agent-001',
-    name: 'Maria Georgiou',
-    email: 'maria.g@hydrainsurance.com.cy',
-    phone: '+357 99 111 222',
-    idNumber: 'AG001',
-    licenseNumber: 'CY-INS-2020-1234',
-    broker: { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
-    status: 'active',
-    createdAt: '2023-01-15T10:00:00Z',
-    customers: [
-      { id: 'cust-001', name: 'Yiannis Kleanthous', email: 'yiannis.k@email.com', pendingEnvelopes: 1 },
-      { id: 'cust-003', name: 'Cyprus Trading Ltd', email: 'info@cyprustrading.com.cy', pendingEnvelopes: 0 },
-    ],
-    recentEnvelopes: [
-      { id: 'env-001', reference: 'PR-2025-0001', customer: 'Yiannis Kleanthous', status: 'PENDING', date: '2025-01-15' },
-      { id: 'env-003', reference: 'PR-2025-0003', customer: 'Cyprus Trading Ltd', status: 'COMPLETED', date: '2025-01-10' },
-    ],
-    stats: { totalCustomers: 45, totalEnvelopes: 120, pendingEnvelopes: 8, completedThisMonth: 12 },
-  },
-  'agent-002': {
-    id: 'agent-002',
-    name: 'Andreas Papadopoulos',
-    email: 'andreas.p@hydrainsurance.com.cy',
-    phone: '+357 99 333 444',
-    idNumber: 'AG002',
-    licenseNumber: 'CY-INS-2021-5678',
-    broker: { id: 'broker-002', name: 'Mediterranean Insurance Services' },
-    status: 'active',
-    createdAt: '2023-03-20T14:30:00Z',
-    customers: [
-      { id: 'cust-002', name: 'Charis Constantinou', email: 'charis.c@email.com', pendingEnvelopes: 1 },
-    ],
-    recentEnvelopes: [
-      { id: 'env-002', reference: 'PR-2025-0002', customer: 'Charis Constantinou', status: 'PENDING', date: '2025-01-14' },
-    ],
-    stats: { totalCustomers: 32, totalEnvelopes: 89, pendingEnvelopes: 5, completedThisMonth: 8 },
-  },
-}
-
-const mockBrokers = [
-  { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
-  { id: 'broker-002', name: 'Mediterranean Insurance Services' },
-  { id: 'broker-003', name: 'Island Risk Solutions' },
-]
+import { usersApi } from '../../../api/usersApi'
 
 const AgentDetailPage = () => {
   const { id } = useParams()
@@ -73,16 +27,58 @@ const AgentDetailPage = () => {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({})
+  const [brokers, setBrokers] = useState([])
 
   useEffect(() => {
-    setTimeout(() => {
-      const data = mockAgents[id]
-      if (data) {
-        setAgent(data)
-        setFormData(data)
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const [agentData, brokersData] = await Promise.all([
+          usersApi.getUser(id),
+          usersApi.getBrokers(),
+        ])
+        
+        if (agentData) {
+          const transformed = {
+            id: agentData.id,
+            name: `${agentData.firstName || ''} ${agentData.lastName || ''}`.trim() || agentData.email,
+            firstName: agentData.firstName || '',
+            lastName: agentData.lastName || '',
+            email: agentData.email || '',
+            phone: agentData.phone || '',
+            idNumber: agentData.businessKey || '',
+            licenseNumber: agentData.licenseNumber || '',
+            broker: agentData.brokerId ? { 
+              id: agentData.brokerId, 
+              name: agentData.brokerName || 'Unknown Broker' 
+            } : null,
+            status: agentData.isActive ? 'active' : 'inactive',
+            createdAt: agentData.createdAt,
+            customers: [], // TODO: Fetch from API
+            recentEnvelopes: [], // TODO: Fetch from API
+            stats: { 
+              totalCustomers: agentData.customerCount || 0, 
+              totalEnvelopes: agentData.envelopeCount || 0, 
+              pendingEnvelopes: agentData.pendingEnvelopeCount || 0, 
+              completedThisMonth: 0 
+            },
+          }
+          setAgent(transformed)
+          setFormData(transformed)
+        }
+        
+        setBrokers(brokersData || [])
+      } catch (error) {
+        console.error('Failed to fetch agent:', error)
+        toast.error('Failed to load agent details')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
-    }, 500)
+    }
+
+    if (id) {
+      fetchData()
+    }
   }, [id])
 
   const handleChange = (e) => {
@@ -91,14 +87,29 @@ const AgentDetailPage = () => {
   }
 
   const handleBrokerChange = (e) => {
-    const broker = mockBrokers.find(b => b.id === e.target.value)
-    setFormData({ ...formData, broker: broker || null })
+    const broker = brokers.find(b => b.id === e.target.value)
+    setFormData({ 
+      ...formData, 
+      broker: broker ? { id: broker.id, name: `${broker.firstName} ${broker.lastName}` } : null 
+    })
   }
 
-  const handleSave = () => {
-    setAgent(formData)
-    setEditing(false)
-    toast.success('Agent updated successfully!')
+  const handleSave = async () => {
+    try {
+      await usersApi.updateUser(id, {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        brokerId: formData.broker?.id || null,
+      })
+      setAgent(formData)
+      setEditing(false)
+      toast.success('Agent updated successfully!')
+    } catch (error) {
+      console.error('Failed to update agent:', error)
+      toast.error('Failed to update agent')
+    }
   }
 
   const handleCancel = () => {
@@ -106,10 +117,16 @@ const AgentDetailPage = () => {
     setEditing(false)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this agent?')) {
-      toast.success('Agent deleted successfully')
-      navigate('/portal/agents')
+      try {
+        await usersApi.deleteUser(id)
+        toast.success('Agent deleted successfully')
+        navigate('/portal/agents')
+      } catch (error) {
+        console.error('Failed to delete agent:', error)
+        toast.error('Failed to delete agent')
+      }
     }
   }
 
@@ -298,16 +315,20 @@ const AgentDetailPage = () => {
                   <select value={formData.broker?.id || ''} onChange={handleBrokerChange}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white">
                     <option value="">Select a broker...</option>
-                    {mockBrokers.map(broker => (
-                      <option key={broker.id} value={broker.id}>{broker.name}</option>
+                    {brokers.map(broker => (
+                      <option key={broker.id} value={broker.id}>{broker.firstName} {broker.lastName}</option>
                     ))}
                   </select>
                 ) : (
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-purple-500" />
-                    <Link to={`/portal/brokers/${agent.broker.id}`} className="text-indigo-600 hover:text-indigo-700">
-                      {agent.broker.name}
-                    </Link>
+                    {agent.broker ? (
+                      <Link to={`/portal/brokers/${agent.broker.id}`} className="text-indigo-600 hover:text-indigo-700">
+                        {agent.broker.name}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-500">No broker assigned</span>
+                    )}
                   </div>
                 )}
               </div>

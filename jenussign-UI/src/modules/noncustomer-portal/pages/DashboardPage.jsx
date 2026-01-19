@@ -1,5 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   FileText,
@@ -15,72 +16,61 @@ import {
   UserPlus,
 } from 'lucide-react'
 import useAuthStore from '../../../shared/store/authStore'
-
-// Mock data for dashboard
-const mockStats = {
-  totalEnvelopes: 5,
-  pendingSignature: 3,
-  signed: 2,
-  totalCustomers: 4,
-}
-
-const mockRecentEnvelopes = [
-  {
-    id: 'env-001',
-    reference: 'PR-2025-0001',
-    customer: 'Yiannis Kleanthous',
-    date: '15 Jan 2025',
-    type: 'Home Insurance',
-    status: 'PENDING',
-  },
-  {
-    id: 'env-002',
-    reference: 'PR-2025-0002',
-    customer: 'Charis Constantinou',
-    date: '14 Jan 2025',
-    type: 'Motor Insurance',
-    status: 'PENDING',
-  },
-  {
-    id: 'env-003',
-    reference: 'PR-2025-0003',
-    customer: 'Cyprus Trading Ltd',
-    date: '10 Jan 2025',
-    type: 'Commercial Insurance',
-    status: 'COMPLETED',
-  },
-  {
-    id: 'env-004',
-    reference: 'PR-2025-0004',
-    customer: 'Tech Solutions Cyprus',
-    date: '12 Jan 2025',
-    type: 'Business Insurance',
-    status: 'PENDING',
-  },
-]
-
-const statusColors = {
-  PENDING: 'bg-amber-100 text-amber-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  EXPIRED: 'bg-red-100 text-red-700',
-}
+import { envelopesApi } from '../../../api/envelopesApi'
+import { customersApi } from '../../../api/customersApi'
+import Loading from '../../../shared/components/Loading'
 
 const DashboardPage = () => {
   const { user, agent } = useAuthStore()
   const currentUser = agent || user || { name: 'User' }
 
+  // Fetch envelopes for stats
+  const { data: envelopesData, isLoading: loadingEnvelopes } = useQuery({
+    queryKey: ['dashboard-envelopes'],
+    queryFn: () => envelopesApi.getEnvelopes({ pageSize: 100 }),
+  })
+
+  // Fetch customers for stats
+  const { data: customersData, isLoading: loadingCustomers } = useQuery({
+    queryKey: ['dashboard-customers'],
+    queryFn: () => customersApi.getCustomers({ pageSize: 100 }),
+  })
+
+  const envelopes = envelopesData?.items || []
+  const customers = customersData?.items || customersData || []
+
+  // Calculate stats from actual data
+  const totalEnvelopes = envelopes.length || envelopesData?.totalCount || 0
+  const pendingSignature = envelopes.filter(e => 
+    e.status === 'PENDING' || e.status === 'SENT' || e.status === 'IN_PROGRESS'
+  ).length
+  const signed = envelopes.filter(e => 
+    e.status === 'COMPLETED' || e.status === 'SIGNED'
+  ).length
+  const totalCustomers = customers.length || customersData?.totalCount || 0
+
+  // Recent envelopes (last 4)
+  const recentEnvelopes = envelopes.slice(0, 4).map(env => ({
+    id: env.id,
+    reference: env.referenceNumber || env.reference,
+    customer: env.customerName || env.customer?.name || 'Unknown',
+    date: env.createdAt ? new Date(env.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A',
+    type: env.type || env.envelopeType || 'Document',
+    status: env.status,
+  }))
+
   const stats = [
     {
       label: 'Total Envelopes',
-      value: mockStats.totalEnvelopes,
+      value: totalEnvelopes,
       icon: FolderOpen,
       color: 'bg-blue-100 text-blue-600',
-      trend: '+12% from last month',
+      trend: null,
       trendUp: true,
     },
     {
       label: 'Pending Signature',
-      value: mockStats.pendingSignature,
+      value: pendingSignature,
       icon: Clock,
       color: 'bg-amber-100 text-amber-600',
       link: '/portal/envelopes?status=PENDING',
@@ -88,14 +78,14 @@ const DashboardPage = () => {
     },
     {
       label: 'Signed',
-      value: mockStats.signed,
+      value: signed,
       icon: CheckCircle2,
       color: 'bg-green-100 text-green-600',
-      progress: Math.round((mockStats.signed / mockStats.totalEnvelopes) * 100),
+      progress: totalEnvelopes > 0 ? Math.round((signed / totalEnvelopes) * 100) : 0,
     },
     {
       label: 'Total Customers',
-      value: mockStats.totalCustomers,
+      value: totalCustomers,
       icon: Users,
       color: 'bg-purple-100 text-purple-600',
       link: '/portal/customers',
@@ -185,7 +175,12 @@ const DashboardPage = () => {
           </div>
           
           <div className="divide-y divide-gray-100">
-            {mockRecentEnvelopes.map((envelope) => (
+            {recentEnvelopes.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-500">
+                <FolderOpen className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No envelopes yet</p>
+              </div>
+            ) : recentEnvelopes.map((envelope) => (
               <Link
                 key={envelope.id}
                 to={`/portal/envelopes/${envelope.id}`}
@@ -206,8 +201,15 @@ const DashboardPage = () => {
                     </div>
                   </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[envelope.status]}`}>
-                  {envelope.status === 'PENDING' ? 'Pending' : 'Completed'}
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  envelope.status === 'COMPLETED' || envelope.status === 'SIGNED' 
+                    ? 'bg-green-100 text-green-700' 
+                    : envelope.status === 'EXPIRED' 
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {envelope.status === 'COMPLETED' || envelope.status === 'SIGNED' ? 'Completed' : 
+                   envelope.status === 'EXPIRED' ? 'Expired' : 'Pending'}
                 </span>
               </Link>
             ))}

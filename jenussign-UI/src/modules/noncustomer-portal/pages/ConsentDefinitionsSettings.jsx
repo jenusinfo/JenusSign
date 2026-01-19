@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
@@ -22,90 +22,10 @@ import {
   Tag,
   Clock,
   Users,
+  Loader2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-// Mock consent data
-const MOCK_CONSENTS = [
-  {
-    id: 'consent-001',
-    name: 'GDPR Data Processing Consent',
-    shortName: 'GDPR',
-    category: 'privacy',
-    defaultRequired: true,
-    isActive: true,
-    version: '2.1',
-    lastUpdated: '2025-01-15',
-    usedInTypes: 5,
-    text: 'I consent to the processing of my personal data in accordance with the General Data Protection Regulation (GDPR) and the company\'s Privacy Policy. I understand that my data will be used for the purpose of providing insurance services and managing my policy.',
-    legalReference: 'GDPR Article 6(1)(a)',
-  },
-  {
-    id: 'consent-002',
-    name: 'Terms & Conditions Acceptance',
-    shortName: 'T&C',
-    category: 'legal',
-    defaultRequired: true,
-    isActive: true,
-    version: '3.0',
-    lastUpdated: '2025-01-10',
-    usedInTypes: 8,
-    text: 'I confirm that I have read, understood, and agree to be bound by the Terms and Conditions of this insurance policy. I acknowledge that providing false or misleading information may void my coverage.',
-    legalReference: 'Insurance Contract Law',
-  },
-  {
-    id: 'consent-003',
-    name: 'Electronic Communication Consent',
-    shortName: 'E-Comms',
-    category: 'communication',
-    defaultRequired: true,
-    isActive: true,
-    version: '1.5',
-    lastUpdated: '2024-12-20',
-    usedInTypes: 8,
-    text: 'I consent to receive all communications related to my insurance policy electronically, including but not limited to policy documents, renewal notices, claims correspondence, and other official communications via email or through the customer portal.',
-    legalReference: 'eIDAS Regulation',
-  },
-  {
-    id: 'consent-004',
-    name: 'Marketing Communications',
-    shortName: 'Marketing',
-    category: 'marketing',
-    defaultRequired: false,
-    isActive: true,
-    version: '1.2',
-    lastUpdated: '2024-11-15',
-    usedInTypes: 3,
-    text: 'I agree to receive marketing communications about products, services, and special offers from Hydra Insurance Ltd and its partners. I understand I can withdraw this consent at any time.',
-    legalReference: 'GDPR Article 7',
-  },
-  {
-    id: 'consent-005',
-    name: 'Third Party Data Sharing',
-    shortName: '3rd Party',
-    category: 'privacy',
-    defaultRequired: false,
-    isActive: true,
-    version: '1.0',
-    lastUpdated: '2024-10-01',
-    usedInTypes: 2,
-    text: 'I consent to the sharing of my personal data with third-party service providers, including reinsurers, claims assessors, and fraud prevention agencies, for the purposes of policy administration and claims processing.',
-    legalReference: 'GDPR Article 6(1)(f)',
-  },
-  {
-    id: 'consent-006',
-    name: 'Medical Information Release',
-    shortName: 'Medical',
-    category: 'privacy',
-    defaultRequired: true,
-    isActive: false,
-    version: '1.0',
-    lastUpdated: '2024-09-01',
-    usedInTypes: 1,
-    text: 'I authorize the release of my medical information to Hydra Insurance Ltd and its appointed medical examiners for the purpose of assessing my insurance application and processing any related claims.',
-    legalReference: 'Data Protection Act',
-  },
-]
+import { settingsApi } from '../../../api/settingsApi'
 
 const CATEGORIES = [
   { id: 'privacy', name: 'Privacy & Data', color: 'blue' },
@@ -116,13 +36,30 @@ const CATEGORIES = [
 ]
 
 const ConsentDefinitionsSettings = () => {
-  const [consents, setConsents] = useState(MOCK_CONSENTS)
+  const [consents, setConsents] = useState([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [expandedConsent, setExpandedConsent] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingConsent, setEditingConsent] = useState(null)
+
+  // Fetch consents on mount
+  useEffect(() => {
+    const fetchConsents = async () => {
+      try {
+        const data = await settingsApi.getConsentDefinitions()
+        setConsents(data || [])
+      } catch (error) {
+        console.error('Failed to load consent definitions:', error)
+        toast.error('Failed to load consent definitions')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchConsents()
+  }, [])
 
   // Filter consents
   const filteredConsents = consents.filter(consent => {
@@ -136,38 +73,56 @@ const ConsentDefinitionsSettings = () => {
   })
 
   // Toggle consent active status
-  const toggleConsentStatus = (consentId) => {
-    setConsents(prev => prev.map(c => 
-      c.id === consentId ? { ...c, isActive: !c.isActive } : c
-    ))
+  const toggleConsentStatus = async (consentId) => {
     const consent = consents.find(c => c.id === consentId)
-    toast.success(`${consent.shortName} ${consent.isActive ? 'deactivated' : 'activated'}`)
+    try {
+      await settingsApi.updateConsentDefinition(consentId, { isActive: !consent.isActive })
+      setConsents(prev => prev.map(c => 
+        c.id === consentId ? { ...c, isActive: !c.isActive } : c
+      ))
+      toast.success(`${consent.shortName} ${consent.isActive ? 'deactivated' : 'activated'}`)
+    } catch (error) {
+      console.error('Failed to update consent status:', error)
+      toast.error('Failed to update consent status')
+    }
   }
 
   // Delete consent
-  const deleteConsent = (consentId) => {
+  const deleteConsent = async (consentId) => {
     const consent = consents.find(c => c.id === consentId)
     if (consent.usedInTypes > 0) {
       toast.error(`Cannot delete: Used in ${consent.usedInTypes} envelope types`)
       return
     }
-    setConsents(prev => prev.filter(c => c.id !== consentId))
-    toast.success('Consent deleted')
+    try {
+      await settingsApi.deleteConsentDefinition(consentId)
+      setConsents(prev => prev.filter(c => c.id !== consentId))
+      toast.success('Consent deleted')
+    } catch (error) {
+      console.error('Failed to delete consent:', error)
+      toast.error('Failed to delete consent')
+    }
   }
 
   // Duplicate consent
-  const duplicateConsent = (consent) => {
+  const duplicateConsent = async (consent) => {
     const newConsent = {
       ...consent,
-      id: `consent-${Date.now()}`,
+      id: undefined,
       name: `${consent.name} (Copy)`,
       shortName: `${consent.shortName}-Copy`,
       version: '1.0',
       usedInTypes: 0,
       lastUpdated: new Date().toISOString().split('T')[0],
     }
-    setConsents(prev => [...prev, newConsent])
-    toast.success('Consent duplicated')
+    try {
+      const created = await settingsApi.createConsentDefinition(newConsent)
+      setConsents(prev => [...prev, created])
+      toast.success('Consent duplicated')
+    } catch (error) {
+      console.error('Failed to duplicate consent:', error)
+      toast.error('Failed to duplicate consent')
+    }
   }
 
   const getCategoryColor = (category) => {
@@ -178,6 +133,15 @@ const ConsentDefinitionsSettings = () => {
   const getCategoryName = (category) => {
     const cat = CATEGORIES.find(c => c.id === category)
     return cat?.name || category
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <span className="ml-3 text-gray-600">Loading consent definitions...</span>
+      </div>
+    )
   }
 
   return (

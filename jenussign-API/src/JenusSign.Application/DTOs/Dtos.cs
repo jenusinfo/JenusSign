@@ -255,12 +255,35 @@ public record CustomerSigningInfoDto(
     Guid SessionId,
     string CustomerName,
     string CustomerEmail,
+    string? CustomerPhone,
     ProposalStatus Status,
     DateTime? ExpiresAt,
     IEnumerable<DocumentInfoDto> Documents,
     bool IdentityVerified,
     bool OtpVerified,
-    bool CanSign
+    bool CanSign,
+    // Envelope/Proposal info for display
+    string? Reference,
+    string? Title,
+    int DocumentCount,
+    // Agent info
+    SigningAgentInfoDto? Agent,
+    // Masked customer data for verification display
+    CustomerVerificationInfoDto? CustomerInfo
+);
+
+public record SigningAgentInfoDto(
+    string Name,
+    string? Company,
+    string? Email
+);
+
+public record CustomerVerificationInfoDto(
+    string FirstName,
+    string LastName,
+    string MaskedEmail,
+    string? MaskedPhone,
+    string? IdNumberLast4
 );
 
 public record DocumentInfoDto(
@@ -528,5 +551,40 @@ public record HealthStatusDto(
     string Database,
     DateTime Timestamp,
     string Version
+);
+
+// ==================== System Log DTOs ====================
+
+public record SystemLogDto(
+    Guid Id,
+    DateTime Timestamp,
+    string EventType,
+    string Severity,
+    string Message,
+    Guid? EnvelopeId,
+    string? EnvelopeRef,
+    Guid? CustomerId,
+    string? CustomerName,
+    Guid? UserId,
+    string? UserName,
+    string? IpAddress,
+    string? UserAgent,
+    Dictionary<string, object>? Metadata
+);
+
+public record SystemLogListResponse(
+    IEnumerable<SystemLogDto> Logs,
+    int TotalCount,
+    int Page,
+    int PageSize
+);
+
+public record SystemLogStatsResponse(
+    int TotalCount,
+    int InfoCount,
+    int WarningCount,
+    int ErrorCount,
+    DateTime? FromDate,
+    DateTime? ToDate
 );
 

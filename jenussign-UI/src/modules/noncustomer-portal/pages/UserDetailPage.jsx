@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
   User,
@@ -18,60 +19,8 @@ import {
   Key,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const mockUsers = {
-  'user-001': {
-    id: 'user-001',
-    name: 'Admin User',
-    email: 'admin@hydrainsurance.com.cy',
-    phone: '+357 22 100 100',
-    role: 'administrator',
-    department: 'IT',
-    status: 'active',
-    assignedBrokers: [],
-    assignedAgents: [],
-    lastLogin: '2025-01-17T10:00:00Z',
-    createdAt: '2020-01-01T00:00:00Z',
-  },
-  'emp-001': {
-    id: 'emp-001',
-    name: 'Elena Christodoulou',
-    email: 'elena.c@hydrainsurance.com.cy',
-    phone: '+357 99 555 666',
-    role: 'employee',
-    department: 'Sales',
-    status: 'active',
-    assignedBrokers: [{ id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' }],
-    assignedAgents: [{ id: 'agent-001', name: 'Maria Georgiou' }],
-    lastLogin: '2025-01-17T08:30:00Z',
-    createdAt: '2022-03-15T10:00:00Z',
-  },
-  'emp-002': {
-    id: 'emp-002',
-    name: 'Nikos Stavrou',
-    email: 'nikos.s@hydrainsurance.com.cy',
-    phone: '+357 99 777 888',
-    role: 'employee',
-    department: 'Underwriting',
-    status: 'active',
-    assignedBrokers: [{ id: 'broker-002', name: 'Mediterranean Insurance Services' }],
-    assignedAgents: [],
-    lastLogin: '2025-01-16T14:00:00Z',
-    createdAt: '2021-06-20T09:00:00Z',
-  },
-}
-
-const allBrokers = [
-  { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
-  { id: 'broker-002', name: 'Mediterranean Insurance Services' },
-  { id: 'broker-003', name: 'Island Risk Solutions' },
-]
-
-const allAgents = [
-  { id: 'agent-001', name: 'Maria Georgiou' },
-  { id: 'agent-002', name: 'Andreas Papadopoulos' },
-  { id: 'agent-003', name: 'Nikos Konstantinou' },
-]
+import { usersApi } from '../../../api/usersApi'
+import Loading from '../../../shared/components/Loading'
 
 const departments = ['IT', 'Sales', 'Underwriting', 'Claims', 'Operations', 'Finance', 'HR']
 
@@ -79,24 +28,60 @@ const UserDetailPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({})
 
+  // Fetch user from API
+  const { data: userData, isLoading: userLoading } = useQuery({
+    queryKey: ['user', id],
+    queryFn: () => usersApi.getUser(id),
+  })
+
+  // Fetch all brokers
+  const { data: brokersData } = useQuery({
+    queryKey: ['brokers'],
+    queryFn: usersApi.getBrokers,
+  })
+
+  // Fetch all agents
+  const { data: agentsData } = useQuery({
+    queryKey: ['agents'],
+    queryFn: usersApi.getAgents,
+  })
+
+  const allBrokers = (brokersData?.users || []).map(b => ({
+    id: b.id,
+    name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || b.email,
+  }))
+
+  const allAgents = (agentsData?.users || []).map(a => ({
+    id: a.id,
+    name: `${a.firstName || ''} ${a.lastName || ''}`.trim() || a.email,
+  }))
+
   useEffect(() => {
-    setTimeout(() => {
-      const data = mockUsers[id]
-      if (data) {
-        setUser(data)
-        setFormData({
-          ...data,
-          assignedBrokerIds: data.assignedBrokers.map(b => b.id),
-          assignedAgentIds: data.assignedAgents.map(a => a.id),
-        })
+    if (userData) {
+      const transformedUser = {
+        id: userData.id,
+        name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email,
+        email: userData.email || '',
+        phone: userData.phone || '',
+        role: userData.role?.toLowerCase() || 'employee',
+        department: userData.department || 'General',
+        status: userData.isActive ? 'active' : 'inactive',
+        assignedBrokers: [],
+        assignedAgents: [],
+        lastLogin: userData.lastLoginAt,
+        createdAt: userData.createdAt,
       }
-      setLoading(false)
-    }, 500)
-  }, [id])
+      setUser(transformedUser)
+      setFormData({
+        ...transformedUser,
+        assignedBrokerIds: transformedUser.assignedBrokers.map(b => b.id),
+        assignedAgentIds: transformedUser.assignedAgents.map(a => a.id),
+      })
+    }
+  }, [userData])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -153,17 +138,14 @@ const UserDetailPage = () => {
   }
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'Never'
     return new Date(dateString).toLocaleDateString('en-GB', { 
       day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
     })
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
-      </div>
-    )
+  if (userLoading) {
+    return <Loading message="Loading user details..." />
   }
 
   if (!user) {
@@ -176,7 +158,7 @@ const UserDetailPage = () => {
     )
   }
 
-  const isAdmin = user.role === 'administrator'
+  const isAdmin = user.role === 'administrator' || user.role === 'admin'
 
   return (
     <div className="space-y-6">

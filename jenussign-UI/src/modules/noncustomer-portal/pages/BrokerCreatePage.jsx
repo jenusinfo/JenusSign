@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -9,18 +9,16 @@ import {
   CreditCard,
   Save,
   User,
+  Loader2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const mockEmployees = [
-  { id: 'emp-001', name: 'Elena Christodoulou', department: 'Sales' },
-  { id: 'emp-002', name: 'Nikos Stavrou', department: 'Underwriting' },
-  { id: 'emp-003', name: 'Anna Kyriacou', department: 'Claims' },
-]
+import { usersApi } from '../../../api/usersApi'
 
 const BrokerCreatePage = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [employees, setEmployees] = useState([])
+  const [loadingEmployees, setLoadingEmployees] = useState(true)
   const [formData, setFormData] = useState({
     name: '',
     registrationNumber: '',
@@ -36,6 +34,22 @@ const BrokerCreatePage = () => {
     assignedEmployeeIds: [],
     notes: '',
   })
+
+  // Fetch employees on mount
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const data = await usersApi.getEmployees()
+        setEmployees(data)
+      } catch (error) {
+        console.error('Failed to load employees:', error)
+        toast.error('Failed to load employees')
+      } finally {
+        setLoadingEmployees(false)
+      }
+    }
+    fetchEmployees()
+  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -223,22 +237,32 @@ const BrokerCreatePage = () => {
               <p className="text-sm text-gray-500 mt-1">Select employees to manage this broker account</p>
             </div>
             <div className="p-6">
-              <div className="space-y-2">
-                {mockEmployees.map(emp => (
-                  <label key={emp.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.assignedEmployeeIds.includes(emp.id)}
-                      onChange={() => handleEmployeeToggle(emp.id)}
-                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900">{emp.name}</p>
-                      <p className="text-sm text-gray-500">{emp.department}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
+              {loadingEmployees ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-500">Loading employees...</span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {employees.map(emp => (
+                    <label key={emp.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.assignedEmployeeIds.includes(emp.id)}
+                        onChange={() => handleEmployeeToggle(emp.id)}
+                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                      />
+                      <div>
+                        <p className="font-medium text-gray-900">{emp.name}</p>
+                        <p className="text-sm text-gray-500">{emp.department || emp.role}</p>
+                      </div>
+                    </label>
+                  ))}
+                  {employees.length === 0 && (
+                    <p className="text-gray-500 text-sm py-2">No employees found</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

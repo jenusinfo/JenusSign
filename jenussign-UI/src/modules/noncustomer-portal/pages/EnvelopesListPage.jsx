@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Plus,
@@ -18,65 +19,8 @@ import {
   ChevronRight,
   RefreshCw,
 } from 'lucide-react'
-
-// Mock data for envelopes
-const mockEnvelopes = [
-  {
-    id: 'env-001',
-    reference: 'PR-2025-0001',
-    title: 'Home Insurance Proposal',
-    customer: { name: 'Yiannis Kleanthous', email: 'yiannis.kleanthous@hydrainsurance.com.cy' },
-    status: 'PENDING',
-    documentsCount: 3,
-    createdAt: '2025-01-15T10:00:00Z',
-    expiresAt: '2026-12-31T23:59:59Z',
-    type: 'Home Insurance',
-  },
-  {
-    id: 'env-002',
-    reference: 'PR-2025-0002',
-    title: 'Motor Insurance Proposal',
-    customer: { name: 'Charis Constantinou', email: 'charis.constantinou@hydrainsurance.com.cy' },
-    status: 'PENDING',
-    documentsCount: 3,
-    createdAt: '2025-01-14T09:30:00Z',
-    expiresAt: '2026-12-31T23:59:59Z',
-    type: 'Motor Insurance',
-  },
-  {
-    id: 'env-003',
-    reference: 'PR-2025-0003',
-    title: 'Commercial Property Insurance',
-    customer: { name: 'Cyprus Trading Ltd', email: 'info@cyprustrading.com.cy' },
-    status: 'COMPLETED',
-    documentsCount: 4,
-    createdAt: '2025-01-10T14:00:00Z',
-    expiresAt: '2026-12-31T23:59:59Z',
-    type: 'Commercial Insurance',
-  },
-  {
-    id: 'env-004',
-    reference: 'PR-2025-0004',
-    title: 'Business Liability Insurance',
-    customer: { name: 'Tech Solutions Cyprus Ltd', email: 'legal@techsolutions.com.cy' },
-    status: 'IN_PROGRESS',
-    documentsCount: 2,
-    createdAt: '2025-01-12T11:00:00Z',
-    expiresAt: '2026-12-31T23:59:59Z',
-    type: 'Business Insurance',
-  },
-  {
-    id: 'env-005',
-    reference: 'PR-2025-0005',
-    title: 'Travel Insurance Policy',
-    customer: { name: 'Maria Georgiou', email: 'maria.g@example.com' },
-    status: 'EXPIRED',
-    documentsCount: 2,
-    createdAt: '2024-12-01T09:00:00Z',
-    expiresAt: '2024-12-31T23:59:59Z',
-    type: 'Travel Insurance',
-  },
-]
+import { envelopesApi } from '../../../api/envelopesApi'
+import Loading from '../../../shared/components/Loading'
 
 const statusConfig = {
   PENDING: { label: 'Pending', color: 'bg-amber-100 text-amber-700', icon: Clock },
@@ -90,13 +34,29 @@ const EnvelopesListPage = () => {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
-  const [envelopes] = useState(mockEnvelopes)
+
+  // Fetch envelopes from API
+  const { data: envelopesResponse, isLoading } = useQuery({
+    queryKey: ['envelopes', searchQuery, statusFilter],
+    queryFn: () => envelopesApi.getEnvelopes({
+      search: searchQuery || undefined,
+      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+    }),
+  })
+
+  const envelopes = envelopesResponse?.items || []
+
+  if (isLoading) {
+    return <Loading message="Loading envelopes..." />
+  }
 
   const filteredEnvelopes = envelopes.filter((env) => {
     const matchesSearch =
-      env.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      env.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      env.customer.name.toLowerCase().includes(searchQuery.toLowerCase())
+      env.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      env.referenceNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      env.reference?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      env.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      env.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     
     const matchesStatus = statusFilter === 'ALL' || env.status === statusFilter
     

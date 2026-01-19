@@ -12,10 +12,12 @@ const useAuthStore = create(
     (set, get) => ({
       // ========== CUSTOMER AUTH STATE ==========
       customerToken: null,
+      customerRefreshToken: null,
       customer: null,
 
       // ========== AGENT/PORTAL AUTH STATE ==========
       agentToken: null,
+      agentRefreshToken: null,
       agent: null,
       
       // Legacy support
@@ -24,9 +26,10 @@ const useAuthStore = create(
 
       // ========== CUSTOMER AUTH ACTIONS ==========
       
-      setCustomerAuth: (token, customer) => {
+      setCustomerAuth: (token, customer, refreshToken = null) => {
         set({ 
           customerToken: token, 
+          customerRefreshToken: refreshToken,
           customer,
         })
       },
@@ -46,15 +49,17 @@ const useAuthStore = create(
       logoutCustomer: () => {
         set({ 
           customerToken: null, 
+          customerRefreshToken: null,
           customer: null,
         })
       },
 
       // ========== AGENT AUTH ACTIONS ==========
       
-      setAgentAuth: (token, agent) => {
+      setAgentAuth: (token, agent, refreshToken = null) => {
         set({ 
           agentToken: token, 
+          agentRefreshToken: refreshToken,
           agent,
           // Also set legacy fields for compatibility
           token,
@@ -79,6 +84,7 @@ const useAuthStore = create(
       logoutAgent: () => {
         set({ 
           agentToken: null, 
+          agentRefreshToken: null,
           agent: null,
           token: null,
           user: null,

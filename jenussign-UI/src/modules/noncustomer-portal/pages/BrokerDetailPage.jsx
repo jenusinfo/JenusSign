@@ -20,62 +20,7 @@ import {
   Plus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const mockBrokers = {
-  'broker-001': {
-    id: 'broker-001',
-    name: 'Cyprus Insurance Brokers Ltd',
-    registrationNumber: 'HE-123456',
-    email: 'info@cyprusbrokers.com.cy',
-    phone: '+357 22 111 222',
-    address: '123 Makarios Avenue',
-    city: 'Nicosia',
-    postalCode: '1065',
-    country: 'Cyprus',
-    contactPerson: 'Stavros Michaelides',
-    contactPhone: '+357 99 888 999',
-    contactEmail: 'stavros@cyprusbrokers.com.cy',
-    status: 'active',
-    createdAt: '2020-01-15T10:00:00Z',
-    agents: [
-      { id: 'agent-001', name: 'Maria Georgiou', email: 'maria.g@hydrainsurance.com.cy', customers: 45, status: 'active' },
-      { id: 'agent-003', name: 'Nikos Konstantinou', email: 'nikos.k@hydrainsurance.com.cy', customers: 28, status: 'active' },
-    ],
-    assignedEmployees: [
-      { id: 'emp-001', name: 'Elena Christodoulou', role: 'Account Manager' },
-    ],
-    stats: { totalAgents: 2, totalCustomers: 73, totalEnvelopes: 195, completedEnvelopes: 178 },
-  },
-  'broker-002': {
-    id: 'broker-002',
-    name: 'Mediterranean Insurance Services',
-    registrationNumber: 'HE-234567',
-    email: 'contact@medinsurance.com.cy',
-    phone: '+357 22 333 444',
-    address: '45 Griva Digeni Avenue',
-    city: 'Limassol',
-    postalCode: '3106',
-    country: 'Cyprus',
-    contactPerson: 'Maria Georgiou',
-    contactPhone: '+357 99 777 888',
-    contactEmail: 'maria@medinsurance.com.cy',
-    status: 'active',
-    createdAt: '2019-03-20T14:30:00Z',
-    agents: [
-      { id: 'agent-002', name: 'Andreas Papadopoulos', email: 'andreas.p@hydrainsurance.com.cy', customers: 32, status: 'active' },
-    ],
-    assignedEmployees: [
-      { id: 'emp-002', name: 'Nikos Stavrou', role: 'Sales Manager' },
-    ],
-    stats: { totalAgents: 1, totalCustomers: 32, totalEnvelopes: 89, completedEnvelopes: 84 },
-  },
-}
-
-const mockEmployees = [
-  { id: 'emp-001', name: 'Elena Christodoulou' },
-  { id: 'emp-002', name: 'Nikos Stavrou' },
-  { id: 'emp-003', name: 'Anna Kyriacou' },
-]
+import { usersApi } from '../../../api/usersApi'
 
 const BrokerDetailPage = () => {
   const { id } = useParams()
@@ -86,14 +31,52 @@ const BrokerDetailPage = () => {
   const [formData, setFormData] = useState({})
 
   useEffect(() => {
-    setTimeout(() => {
-      const data = mockBrokers[id]
-      if (data) {
-        setBroker(data)
-        setFormData(data)
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const brokerData = await usersApi.getUser(id)
+        
+        if (brokerData) {
+          const transformed = {
+            id: brokerData.id,
+            name: brokerData.companyName || `${brokerData.firstName || ''} ${brokerData.lastName || ''}`.trim() || brokerData.email,
+            firstName: brokerData.firstName || '',
+            lastName: brokerData.lastName || '',
+            registrationNumber: brokerData.businessKey || '',
+            email: brokerData.email || '',
+            phone: brokerData.phone || '',
+            address: brokerData.address || '',
+            city: brokerData.city || '',
+            postalCode: brokerData.postalCode || '',
+            country: brokerData.country || 'Cyprus',
+            contactPerson: `${brokerData.firstName || ''} ${brokerData.lastName || ''}`.trim(),
+            contactPhone: brokerData.phone || '',
+            contactEmail: brokerData.email || '',
+            status: brokerData.isActive ? 'active' : 'inactive',
+            createdAt: brokerData.createdAt,
+            agents: [], // TODO: Fetch agents for this broker
+            assignedEmployees: [],
+            stats: { 
+              totalAgents: brokerData.agentCount || 0, 
+              totalCustomers: brokerData.customerCount || 0, 
+              totalEnvelopes: brokerData.envelopeCount || 0, 
+              completedEnvelopes: 0 
+            },
+          }
+          setBroker(transformed)
+          setFormData(transformed)
+        }
+      } catch (error) {
+        console.error('Failed to fetch broker:', error)
+        toast.error('Failed to load broker details')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
-    }, 500)
+    }
+
+    if (id) {
+      fetchData()
+    }
   }, [id])
 
   const handleChange = (e) => {
@@ -101,10 +84,22 @@ const BrokerDetailPage = () => {
     setFormData({ ...formData, [name]: value })
   }
 
-  const handleSave = () => {
-    setBroker(formData)
-    setEditing(false)
-    toast.success('Broker updated successfully!')
+  const handleSave = async () => {
+    try {
+      await usersApi.updateUser(id, {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        companyName: formData.name,
+      })
+      setBroker(formData)
+      setEditing(false)
+      toast.success('Broker updated successfully!')
+    } catch (error) {
+      console.error('Failed to update broker:', error)
+      toast.error('Failed to update broker')
+    }
   }
 
   const handleCancel = () => {
@@ -112,10 +107,16 @@ const BrokerDetailPage = () => {
     setEditing(false)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this broker? All associated agents will need to be reassigned.')) {
-      toast.success('Broker deleted successfully')
-      navigate('/portal/brokers')
+      try {
+        await usersApi.deleteUser(id)
+        toast.success('Broker deleted successfully')
+        navigate('/portal/brokers')
+      } catch (error) {
+        console.error('Failed to delete broker:', error)
+        toast.error('Failed to delete broker')
+      }
     }
   }
 

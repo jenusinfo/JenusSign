@@ -21,6 +21,7 @@ public class JenusSignDbContext : IdentityDbContext<User, IdentityRole<Guid>, Gu
     public DbSet<SigningSession> SigningSessions => Set<SigningSession>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
+    public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -197,6 +198,42 @@ public class JenusSignDbContext : IdentityDbContext<User, IdentityRole<Guid>, Gu
                 .WithMany()
                 .HasForeignKey(e => e.SigningSessionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // SystemLog configuration
+        modelBuilder.Entity<SystemLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Timestamp);
+            entity.HasIndex(e => e.EventType);
+            entity.HasIndex(e => e.Severity);
+            entity.HasIndex(e => e.EnvelopeId);
+            entity.HasIndex(e => e.CustomerId);
+            entity.HasIndex(e => e.UserId);
+            
+            entity.Property(e => e.EventType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Severity).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Message).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.EnvelopeRef).HasMaxLength(50);
+            entity.Property(e => e.CustomerName).HasMaxLength(200);
+            entity.Property(e => e.UserName).HasMaxLength(200);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+            entity.Property(e => e.UserAgent).HasMaxLength(500);
+            
+            entity.HasOne(e => e.Envelope)
+                .WithMany()
+                .HasForeignKey(e => e.EnvelopeId)
+                .OnDelete(DeleteBehavior.SetNull);
+                
+            entity.HasOne(e => e.Customer)
+                .WithMany()
+                .HasForeignKey(e => e.CustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
+                
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 

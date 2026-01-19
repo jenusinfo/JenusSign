@@ -27,6 +27,12 @@ import {
 import toast from 'react-hot-toast'
 import Logo from '../../../shared/components/Logo'
 import useAuthStore from '../../../shared/store/authStore'
+import {
+  getSigningSession,
+  verifyIdentity as apiVerifyIdentity,
+  requestOtp as apiRequestOtp,
+  verifyOtp as apiVerifyOtp,
+} from '../../../api/signingApi'
 
 // Verification method options
 const VERIFICATION_METHODS = {
@@ -87,14 +93,14 @@ const CustomerVerificationPage = () => {
 
   // Customer data from token/API
   const [customerData, setCustomerData] = useState({
-    firstName: 'Yiannis',
-    lastName: 'Kleanthous',
-    email: 'yiannis.k●●●●●@email.com',
-    emailFull: 'yiannis.kleanthous@email.com',
-    phone: '+357 99 ●●● 456',
-    phoneFull: '+35799123456',
-    idNumberLast4: '4567',
-    dateOfBirth: '1985-03-12',
+    firstName: '',
+    lastName: '',
+    email: '',
+    emailFull: '',
+    phone: '',
+    phoneFull: '',
+    idNumberLast4: '',
+    dateOfBirth: '',
   })
 
   // Load envelope data on mount
@@ -113,68 +119,40 @@ const CustomerVerificationPage = () => {
   const loadEnvelopeData = async () => {
     setIsLoading(true)
     try {
-      // Simulate API call - in production, validate token and get envelope
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const data = await getSigningSession(token)
 
-      // Mock token to envelope mapping (simulates API lookup)
-      const tokenToEnvelope = {
-        'demo1': {
-          id: 'env-001',
-          reference: 'PR-2025-0001',
-          title: 'Home Insurance Proposal',
-          status: 'pending',
-          documentCount: 3,
-          expiresAt: '2026-02-17T00:00:00Z',
-          customer: {
-            name: 'Yiannis Kleanthous',
-            email: 'yiannis.kleanthous@email.com',
-          },
-          agent: {
-            name: 'Maria Georgiou',
-            company: 'Hydra Insurance Ltd',
-          },
-        },
-        'demo2': {
-          id: 'env-002',
-          reference: 'PR-2025-0002',
-          title: 'Motor Insurance Proposal',
-          status: 'pending',
-          documentCount: 3,
-          expiresAt: '2026-02-17T00:00:00Z',
-          customer: {
-            name: 'Charis Constantinou',
-            email: 'charis.constantinou@email.com',
-          },
-          agent: {
-            name: 'Andreas Papadopoulos',
-            company: 'Hydra Insurance Ltd',
-          },
-        },
-      }
-
-      const envelope = tokenToEnvelope[token]
-      
-      if (!envelope) {
+      if (!data) {
         throw new Error('Invalid or expired link')
       }
 
-      // Store envelope ID from token lookup
-      setEnvelopeId(envelope.id)
-      setEnvelopeData(envelope)
+      setEnvelopeId(data.sessionId)
+      setEnvelopeData({
+        id: data.sessionId,
+        reference: data.reference || '',
+        title: data.title || '',
+        status: data.status || 'Pending',
+        documentCount: data.documentCount ?? data.documents?.length ?? 0,
+        expiresAt: data.expiresAt,
+        customer: {
+          name: data.customerName || '',
+          email: data.customerEmail || '',
+        },
+        agent: {
+          name: data.agent?.name || '',
+          company: data.agent?.company || '',
+        },
+      })
 
-      // Update customer data based on envelope
-      if (envelope.id === 'env-002') {
-        setCustomerData({
-          firstName: 'Charis',
-          lastName: 'Constantinou',
-          email: 'charis.c●●●●●@email.com',
-          emailFull: 'charis.constantinou@email.com',
-          phone: '+357 99 ●●● 321',
-          phoneFull: '+35799654321',
-          idNumberLast4: '4321',
-          dateOfBirth: '1990-07-22',
-        })
-      }
+      setCustomerData({
+        firstName: data.customerInfo?.firstName || '',
+        lastName: data.customerInfo?.lastName || '',
+        email: data.customerInfo?.maskedEmail || data.customerEmail || '',
+        emailFull: data.customerEmail || '',
+        phone: data.customerInfo?.maskedPhone || data.customerPhone || '',
+        phoneFull: data.customerPhone || '',
+        idNumberLast4: data.customerInfo?.idNumberLast4 || '',
+        dateOfBirth: '',
+      })
 
       // Check if user is already verified (e.g., from session)
       const isAlreadyVerified = sessionStorage.getItem(`verified_${token}`)
@@ -206,18 +184,19 @@ const CustomerVerificationPage = () => {
 
     setIsLoading(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const response = await apiVerifyIdentity(token, {
+        idNumber: manualFormData.idNumber,
+        fullName: `${manualFormData.firstName} ${manualFormData.lastName}`.trim(),
+        dateOfBirth: manualFormData.dateOfBirth,
+        method: 'ManualEntry',
+      })
 
-      // Simulate verification check
-      const idMatches = manualFormData.idNumber.endsWith(customerData.idNumberLast4)
-      const dobMatches = manualFormData.dateOfBirth === customerData.dateOfBirth
-
-      if (idMatches && dobMatches) {
+      if (response?.success) {
         setIdentityVerified(true)
         setCurrentStep(STEPS.CONTACT_VERIFICATION)
         toast.success('Identity verified successfully')
       } else {
-        toast.error('The information provided does not match our records. Please try again.')
+        toast.error(response?.errorMessage || 'The information provided does not match our records. Please try again.')
       }
     } catch (err) {
       toast.error('Verification failed. Please try again.')
@@ -272,10 +251,20 @@ const CustomerVerificationPage = () => {
   const confirmOcrResult = async () => {
     setIsLoading(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setIdentityVerified(true)
-      setCurrentStep(STEPS.CONTACT_VERIFICATION)
-      toast.success('Identity verified via document scan')
+      const response = await apiVerifyIdentity(token, {
+        idNumber: ocrResult?.idNumber,
+        fullName: `${ocrResult?.firstName || ''} ${ocrResult?.lastName || ''}`.trim(),
+        dateOfBirth: ocrResult?.dateOfBirth,
+        method: 'IdCardScan',
+      })
+
+      if (response?.success) {
+        setIdentityVerified(true)
+        setCurrentStep(STEPS.CONTACT_VERIFICATION)
+        toast.success('Identity verified via document scan')
+      } else {
+        toast.error(response?.errorMessage || 'Verification failed')
+      }
     } catch (err) {
       toast.error('Verification failed')
     } finally {
@@ -334,10 +323,15 @@ const CustomerVerificationPage = () => {
   const sendOtp = async () => {
     setIsLoading(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setOtpSent(true)
-      setOtpResendTimer(60)
-      toast.success(`OTP sent to ${contactMethod === 'email' ? customerData.email : customerData.phone}`)
+      const channel = contactMethod === 'email' ? 'Email' : 'Sms'
+      const response = await apiRequestOtp(token, channel)
+      if (response?.success) {
+        setOtpSent(true)
+        setOtpResendTimer(60)
+        toast.success(`OTP sent to ${response?.maskedDestination || (contactMethod === 'email' ? customerData.email : customerData.phone)}`)
+      } else {
+        toast.error(response?.errorMessage || 'Failed to send OTP')
+      }
     } catch (err) {
       toast.error('Failed to send OTP')
     } finally {
@@ -381,35 +375,31 @@ const CustomerVerificationPage = () => {
 
     setIsLoading(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const response = await apiVerifyOtp(token, code)
 
-      // For demo, accept any 6-digit code or specific test code
-      if (code === '123456' || code.length === 6) {
-        // Store verification in session (keyed by token)
+      if (response?.success) {
         sessionStorage.setItem(`verified_${token}`, 'true')
         sessionStorage.setItem(`verification_method_${token}`, verificationMethod)
-        sessionStorage.setItem(`envelope_id_${token}`, envelopeId)  // Store internal ID
-        
-        // Also log the customer into the portal so they can access dashboard
+        sessionStorage.setItem(`envelope_id_${token}`, envelopeId)
+
         const customerAuthData = {
           id: envelopeId,
-          name: envelopeData?.customer?.name || customerData.firstName + ' ' + customerData.lastName,
+          name: envelopeData?.customer?.name || `${customerData.firstName} ${customerData.lastName}`.trim(),
           email: customerData.emailFull || envelopeData?.customer?.email,
           phone: customerData.phoneFull,
           verifiedAt: new Date().toISOString(),
           verificationMethod: verificationMethod,
         }
         setCustomerAuth(`customer_${token}`, customerAuthData)
-        
+
         setCurrentStep(STEPS.VERIFIED)
         toast.success('Verification complete!')
 
-        // Redirect to signing after short delay (using token in URL)
         setTimeout(() => {
           navigate(`/customer/sign/${token}`)
         }, 2000)
       } else {
-        toast.error('Invalid OTP. Please try again.')
+        toast.error(response?.errorMessage || 'Invalid OTP. Please try again.')
       }
     } catch (err) {
       toast.error('Verification failed')

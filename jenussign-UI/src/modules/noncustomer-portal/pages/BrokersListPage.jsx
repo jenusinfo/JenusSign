@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Plus,
@@ -12,71 +13,40 @@ import {
   FileText,
   MapPin,
 } from 'lucide-react'
-
-const mockBrokers = [
-  {
-    id: 'broker-001',
-    name: 'Cyprus Insurance Brokers Ltd',
-    registrationNumber: 'HE-123456',
-    email: 'info@cyprusbrokers.com.cy',
-    phone: '+357 22 111 222',
-    address: 'Nicosia, Cyprus',
-    contactPerson: 'Stavros Michaelides',
-    status: 'active',
-    totalAgents: 5,
-    totalCustomers: 125,
-    totalEnvelopes: 450,
-    createdAt: '2020-01-15T10:00:00Z',
-  },
-  {
-    id: 'broker-002',
-    name: 'Mediterranean Insurance Services',
-    registrationNumber: 'HE-234567',
-    email: 'contact@medinsurance.com.cy',
-    phone: '+357 22 333 444',
-    address: 'Limassol, Cyprus',
-    contactPerson: 'Maria Georgiou',
-    status: 'active',
-    totalAgents: 8,
-    totalCustomers: 245,
-    totalEnvelopes: 890,
-    createdAt: '2019-03-20T14:30:00Z',
-  },
-  {
-    id: 'broker-003',
-    name: 'Island Risk Solutions',
-    registrationNumber: 'HE-345678',
-    email: 'office@islandrisk.com.cy',
-    phone: '+357 22 555 666',
-    address: 'Larnaca, Cyprus',
-    contactPerson: 'Andreas Petrou',
-    status: 'active',
-    totalAgents: 3,
-    totalCustomers: 67,
-    totalEnvelopes: 180,
-    createdAt: '2021-06-10T09:00:00Z',
-  },
-  {
-    id: 'broker-004',
-    name: 'Paphos Insurance Agency',
-    registrationNumber: 'HE-456789',
-    email: 'info@paphosins.com.cy',
-    phone: '+357 26 777 888',
-    address: 'Paphos, Cyprus',
-    contactPerson: 'Eleni Christou',
-    status: 'inactive',
-    totalAgents: 2,
-    totalCustomers: 45,
-    totalEnvelopes: 98,
-    createdAt: '2022-01-05T11:00:00Z',
-  },
-]
+import { usersApi } from '../../../api/usersApi'
+import Loading from '../../../shared/components/Loading'
 
 const BrokersListPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
-  const filteredBrokers = mockBrokers.filter((broker) => {
+  // Fetch brokers from API
+  const { data: brokers = [], isLoading } = useQuery({
+    queryKey: ['brokers'],
+    queryFn: () => usersApi.getBrokers(),
+  })
+
+  if (isLoading) {
+    return <Loading message="Loading brokers..." />
+  }
+
+  // Transform brokers to expected format
+  const transformedBrokers = brokers.map(broker => ({
+    id: broker.id,
+    name: broker.companyName || `${broker.firstName || ''} ${broker.lastName || ''}`.trim() || broker.email,
+    registrationNumber: broker.businessKey || '',
+    email: broker.email || '',
+    phone: broker.phone || '',
+    address: broker.address || '',
+    contactPerson: `${broker.firstName || ''} ${broker.lastName || ''}`.trim(),
+    status: broker.isActive ? 'active' : 'inactive',
+    totalAgents: broker.agentCount || 0,
+    totalCustomers: broker.customerCount || 0,
+    totalEnvelopes: broker.envelopeCount || 0,
+    createdAt: broker.createdAt,
+  }))
+
+  const filteredBrokers = transformedBrokers.filter((broker) => {
     const matchesSearch =
       broker.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       broker.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -206,24 +176,24 @@ const BrokersListPage = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Brokers</p>
-          <p className="text-2xl font-bold text-gray-900">{mockBrokers.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{transformedBrokers.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Agents</p>
           <p className="text-2xl font-bold text-blue-600">
-            {mockBrokers.reduce((sum, b) => sum + b.totalAgents, 0)}
+            {transformedBrokers.reduce((sum, b) => sum + b.totalAgents, 0)}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Customers</p>
           <p className="text-2xl font-bold text-purple-600">
-            {mockBrokers.reduce((sum, b) => sum + b.totalCustomers, 0)}
+            {transformedBrokers.reduce((sum, b) => sum + b.totalCustomers, 0)}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Envelopes</p>
           <p className="text-2xl font-bold text-green-600">
-            {mockBrokers.reduce((sum, b) => sum + b.totalEnvelopes, 0)}
+            {transformedBrokers.reduce((sum, b) => sum + b.totalEnvelopes, 0)}
           </p>
         </div>
       </div>

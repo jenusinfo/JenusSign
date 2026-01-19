@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Plus,
@@ -12,94 +13,42 @@ import {
   UserCircle,
   Building2,
 } from 'lucide-react'
-
-const mockCustomers = [
-  {
-    id: 'cust-001',
-    firstName: 'Yiannis',
-    lastName: 'Kleanthous',
-    email: 'yiannis.kleanthous@hydrainsurance.com.cy',
-    phone: '+357 99 123 456',
-    idNumber: 'X1234567',
-    assignedAgent: { id: 'agent-001', name: 'Maria Georgiou' },
-    assignedEmployee: null,
-    totalEnvelopes: 3,
-    pendingEnvelopes: 1,
-    createdAt: '2024-06-15T10:00:00Z',
-  },
-  {
-    id: 'cust-002',
-    firstName: 'Charis',
-    lastName: 'Constantinou',
-    email: 'charis.constantinou@hydrainsurance.com.cy',
-    phone: '+357 99 654 321',
-    idNumber: 'M7654321',
-    assignedAgent: { id: 'agent-002', name: 'Andreas Papadopoulos' },
-    assignedEmployee: { id: 'emp-001', name: 'Elena Christodoulou' },
-    totalEnvelopes: 2,
-    pendingEnvelopes: 1,
-    createdAt: '2024-08-20T14:30:00Z',
-  },
-  {
-    id: 'cust-003',
-    firstName: 'Cyprus Trading',
-    lastName: 'Ltd',
-    email: 'info@cyprustrading.com.cy',
-    phone: '+357 22 123 456',
-    idNumber: 'HE123456',
-    assignedAgent: { id: 'agent-001', name: 'Maria Georgiou' },
-    assignedEmployee: null,
-    totalEnvelopes: 5,
-    pendingEnvelopes: 0,
-    createdAt: '2024-03-10T09:00:00Z',
-  },
-  {
-    id: 'cust-004',
-    firstName: 'Tech Solutions',
-    lastName: 'Cyprus Ltd',
-    email: 'legal@techsolutions.com.cy',
-    phone: '+357 22 987 654',
-    idNumber: 'HE654321',
-    assignedAgent: { id: 'agent-003', name: 'Elena Christodoulou' },
-    assignedEmployee: { id: 'emp-002', name: 'Nikos Stavrou' },
-    totalEnvelopes: 1,
-    pendingEnvelopes: 1,
-    createdAt: '2025-01-05T11:00:00Z',
-  },
-  {
-    id: 'cust-005',
-    firstName: 'Stavros',
-    lastName: 'Michaelides',
-    email: 'stavros.m@gmail.com',
-    phone: '+357 99 888 777',
-    idNumber: 'K9876543',
-    assignedAgent: { id: 'agent-002', name: 'Andreas Papadopoulos' },
-    assignedEmployee: null,
-    totalEnvelopes: 2,
-    pendingEnvelopes: 0,
-    createdAt: '2023-11-20T15:00:00Z',
-  },
-]
-
-const mockAgents = [
-  { id: 'agent-001', name: 'Maria Georgiou' },
-  { id: 'agent-002', name: 'Andreas Papadopoulos' },
-  { id: 'agent-003', name: 'Elena Christodoulou' },
-]
+import { customersApi } from '../../../api/customersApi'
+import { usersApi } from '../../../api/usersApi'
+import Loading from '../../../shared/components/Loading'
 
 const CustomersListPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [agentFilter, setAgentFilter] = useState('ALL')
   const [employeeFilter, setEmployeeFilter] = useState('ALL')
 
-  const filteredCustomers = mockCustomers.filter((customer) => {
-    const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase()
+  // Fetch customers from API
+  const { data: customersData, isLoading } = useQuery({
+    queryKey: ['customers', searchQuery],
+    queryFn: () => customersApi.getCustomers({ search: searchQuery || undefined }),
+  })
+
+  // Fetch agents for filter dropdown
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => usersApi.getAgents(),
+  })
+
+  const customers = customersData?.items || customersData || []
+
+  if (isLoading) {
+    return <Loading message="Loading customers..." />
+  }
+
+  const filteredCustomers = customers.filter((customer) => {
+    const fullName = customer.fullName || customer.displayName || `${customer.firstName || ''} ${customer.lastName || ''}`.toLowerCase()
     const matchesSearch =
-      fullName.includes(searchQuery.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.idNumber.toLowerCase().includes(searchQuery.toLowerCase())
+      fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.idNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.businessKey?.toLowerCase().includes(searchQuery.toLowerCase())
     
-    const matchesAgent = agentFilter === 'ALL' || customer.assignedAgent?.id === agentFilter
+    const matchesAgent = agentFilter === 'ALL' || customer.agentId === agentFilter
     const matchesEmployee = employeeFilter === 'ALL' || 
       (employeeFilter === 'DIRECT' && customer.assignedEmployee) ||
       (employeeFilter === 'BROKER' && !customer.assignedEmployee)
@@ -144,8 +93,8 @@ const CustomersListPage = () => {
               className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
             >
               <option value="ALL">All Agents</option>
-              {mockAgents.map(agent => (
-                <option key={agent.id} value={agent.id}>{agent.name}</option>
+              {agents.map(agent => (
+                <option key={agent.id} value={agent.id}>{agent.fullName || `${agent.firstName} ${agent.lastName}`}</option>
               ))}
             </select>
             <select
@@ -271,24 +220,24 @@ const CustomersListPage = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Customers</p>
-          <p className="text-2xl font-bold text-gray-900">{mockCustomers.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{customers.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Direct Business</p>
           <p className="text-2xl font-bold text-purple-600">
-            {mockCustomers.filter(c => c.assignedEmployee).length}
+            {customers.filter(c => c.assignedEmployee).length}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Broker Only</p>
           <p className="text-2xl font-bold text-blue-600">
-            {mockCustomers.filter(c => !c.assignedEmployee).length}
+            {customers.filter(c => !c.assignedEmployee).length}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Pending Envelopes</p>
+          <p className="text-sm text-gray-500">Agents</p>
           <p className="text-2xl font-bold text-amber-600">
-            {mockCustomers.reduce((sum, c) => sum + c.pendingEnvelopes, 0)}
+            {agents.length}
           </p>
         </div>
       </div>

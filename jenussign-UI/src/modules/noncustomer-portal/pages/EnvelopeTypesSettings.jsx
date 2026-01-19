@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
@@ -19,137 +19,54 @@ import {
   Code,
   Folder,
   ClipboardCheck,
+  Loader2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-// Available consents (would come from API/ConsentDefinitionsSettings)
-const AVAILABLE_CONSENTS = [
-  { id: 'consent-001', name: 'GDPR Data Processing Consent', shortName: 'GDPR', category: 'privacy', defaultRequired: true },
-  { id: 'consent-002', name: 'Terms & Conditions Acceptance', shortName: 'T&C', category: 'legal', defaultRequired: true },
-  { id: 'consent-003', name: 'Electronic Communication Consent', shortName: 'E-Comms', category: 'communication', defaultRequired: true },
-  { id: 'consent-004', name: 'Marketing Communications', shortName: 'Marketing', category: 'marketing', defaultRequired: false },
-  { id: 'consent-005', name: 'Third Party Data Sharing', shortName: '3rd Party', category: 'privacy', defaultRequired: false },
-  { id: 'consent-006', name: 'Medical Information Release', shortName: 'Medical', category: 'privacy', defaultRequired: true },
-]
-
-// Mock data for envelope types
-const initialEnvelopeTypes = [
-  {
-    id: 'type-001',
-    name: 'Home Insurance Proposal',
-    code: 'HOME_INS_PROP',
-    description: 'Standard home insurance proposal requiring customer signature',
-    category: 'Insurance',
-    allowManualCreation: true,
-    allowApiCreation: true,
-    requiresIdVerification: true,
-    requiresFaceMatch: true,
-    defaultExpiryDays: 30,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Insurance Proposal', description: 'Main proposal document from Navins', required: true, allowedFormats: ['pdf'], maxSizeMb: 10 },
-      { id: 'doc-2', name: 'Terms & Conditions', description: 'Standard T&C document', required: true, allowedFormats: ['pdf'], maxSizeMb: 5 },
-      { id: 'doc-3', name: 'Privacy Policy', description: 'GDPR privacy notice', required: false, allowedFormats: ['pdf'], maxSizeMb: 5 },
-    ],
-    consents: [
-      { consentId: 'consent-001', required: true },
-      { consentId: 'consent-002', required: true },
-      { consentId: 'consent-003', required: true },
-      { consentId: 'consent-004', required: false },
-    ],
-    isActive: true,
-    usageCount: 145,
-    createdAt: '2024-06-15T10:00:00Z',
-  },
-  {
-    id: 'type-002',
-    name: 'Motor Insurance Proposal',
-    code: 'MOTOR_INS_PROP',
-    description: 'Vehicle insurance proposal with comprehensive coverage details',
-    category: 'Insurance',
-    allowManualCreation: true,
-    allowApiCreation: true,
-    requiresIdVerification: true,
-    requiresFaceMatch: true,
-    defaultExpiryDays: 30,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Insurance Proposal', description: 'Motor insurance proposal', required: true, allowedFormats: ['pdf'], maxSizeMb: 10 },
-      { id: 'doc-2', name: 'Vehicle Details Form', description: 'Vehicle specifications', required: true, allowedFormats: ['pdf'], maxSizeMb: 10 },
-      { id: 'doc-3', name: 'Terms & Conditions', description: 'Standard T&C document', required: true, allowedFormats: ['pdf'], maxSizeMb: 5 },
-    ],
-    consents: [
-      { consentId: 'consent-001', required: true },
-      { consentId: 'consent-002', required: true },
-      { consentId: 'consent-003', required: true },
-    ],
-    isActive: true,
-    usageCount: 89,
-    createdAt: '2024-06-15T10:00:00Z',
-  },
-  {
-    id: 'type-003',
-    name: 'Travel Insurance',
-    code: 'TRAVEL_INS',
-    description: 'Short-term travel insurance policy',
-    category: 'Insurance',
-    allowManualCreation: true,
-    allowApiCreation: false,
-    requiresIdVerification: false,
-    requiresFaceMatch: false,
-    defaultExpiryDays: 7,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Travel Insurance Certificate', description: 'Policy certificate', required: true, allowedFormats: ['pdf'], maxSizeMb: 5 },
-    ],
-    consents: [
-      { consentId: 'consent-001', required: true },
-      { consentId: 'consent-002', required: true },
-    ],
-    isActive: true,
-    usageCount: 234,
-    createdAt: '2024-08-01T10:00:00Z',
-  },
-  {
-    id: 'type-004',
-    name: 'Life Insurance Application',
-    code: 'LIFE_INS_APP',
-    description: 'Life insurance application requiring enhanced verification',
-    category: 'Insurance',
-    allowManualCreation: false,
-    allowApiCreation: true,
-    requiresIdVerification: true,
-    requiresFaceMatch: true,
-    defaultExpiryDays: 14,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Application Form', required: true },
-      { id: 'doc-2', name: 'Health Declaration', required: true },
-      { id: 'doc-3', name: 'Beneficiary Nomination', required: true },
-      { id: 'doc-4', name: 'Terms & Conditions', required: true },
-    ],
-    consents: [
-      { consentId: 'consent-001', required: true },
-      { consentId: 'consent-002', required: true },
-      { consentId: 'consent-003', required: true },
-      { consentId: 'consent-006', required: true },
-    ],
-    isActive: false,
-    usageCount: 12,
-    createdAt: '2024-10-01T10:00:00Z',
-  },
-]
+import { settingsApi } from '../../../api/settingsApi'
 
 const categories = ['Insurance', 'Banking', 'Legal', 'HR', 'Other']
 
 const EnvelopeTypesSettings = () => {
-  const [envelopeTypes, setEnvelopeTypes] = useState(initialEnvelopeTypes)
+  const [envelopeTypes, setEnvelopeTypes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [availableConsents, setAvailableConsents] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editForm, setEditForm] = useState({})
 
-  const handleToggleActive = (id) => {
-    setEnvelopeTypes(types =>
-      types.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t)
-    )
-    toast.success('Status updated')
+  // Fetch envelope types and consents on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [typesData, consentsData] = await Promise.all([
+          settingsApi.getEnvelopeTypes(),
+          settingsApi.getConsentDefinitions()
+        ])
+        setEnvelopeTypes(typesData || [])
+        setAvailableConsents(consentsData || [])
+      } catch (error) {
+        console.error('Failed to load envelope types:', error)
+        toast.error('Failed to load envelope types')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  const handleToggleActive = async (id) => {
+    const type = envelopeTypes.find(t => t.id === id)
+    try {
+      await settingsApi.updateEnvelopeType(id, { isActive: !type.isActive })
+      setEnvelopeTypes(types =>
+        types.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t)
+      )
+      toast.success('Status updated')
+    } catch (error) {
+      console.error('Failed to update status:', error)
+      toast.error('Failed to update status')
+    }
   }
 
   const handleToggleManual = (id) => {
@@ -186,10 +103,16 @@ const EnvelopeTypesSettings = () => {
     setEditForm({})
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this envelope type?')) {
-      setEnvelopeTypes(types => types.filter(t => t.id !== id))
-      toast.success('Envelope type deleted')
+      try {
+        await settingsApi.deleteEnvelopeType(id)
+        setEnvelopeTypes(types => types.filter(t => t.id !== id))
+        toast.success('Envelope type deleted')
+      } catch (error) {
+        console.error('Failed to delete envelope type:', error)
+        toast.error('Failed to delete envelope type')
+      }
     }
   }
 
@@ -198,9 +121,8 @@ const EnvelopeTypesSettings = () => {
     toast.success('API code copied to clipboard')
   }
 
-  const handleCreateNew = () => {
+  const handleCreateNew = async () => {
     const newType = {
-      id: `type-${Date.now()}`,
       name: 'New Envelope Type',
       code: 'NEW_TYPE',
       description: '',
@@ -214,18 +136,32 @@ const EnvelopeTypesSettings = () => {
         { id: 'doc-1', name: 'Main Document', required: true },
       ],
       consents: [
-        { consentId: 'consent-001', required: true }, // GDPR
-        { consentId: 'consent-002', required: true }, // T&C
+        { consentId: 'consent-001', required: true },
+        { consentId: 'consent-002', required: true },
       ],
       isActive: false,
       usageCount: 0,
-      createdAt: new Date().toISOString(),
     }
-    setEnvelopeTypes([...envelopeTypes, newType])
-    setExpandedId(newType.id)
-    setEditingId(newType.id)
-    setEditForm(newType)
-    toast.success('New envelope type created - please configure it')
+    try {
+      const created = await settingsApi.createEnvelopeType(newType)
+      setEnvelopeTypes([...envelopeTypes, created])
+      setExpandedId(created.id)
+      setEditingId(created.id)
+      setEditForm(created)
+      toast.success('New envelope type created - please configure it')
+    } catch (error) {
+      console.error('Failed to create envelope type:', error)
+      toast.error('Failed to create envelope type')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <span className="ml-3 text-gray-600">Loading envelope types...</span>
+      </div>
+    )
   }
 
   return (

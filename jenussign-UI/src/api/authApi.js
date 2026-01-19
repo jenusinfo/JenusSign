@@ -1,112 +1,121 @@
 import httpClient from './httpClient'
 
-// Mock mode for demo - set to true to use mock data
-const MOCK_MODE = true
-
-// Mock data
-const mockUsers = [
-  {
-    id: '1',
-    email: 'admin@insurance.com',
-    password: 'admin123',
-    displayName: 'Admin User',
-    role: 'Admin',
-  },
-  {
-    id: '2',
-    email: 'agent@insurance.com',
-    password: 'agent123',
-    displayName: 'Agent Smith',
-    role: 'Agent',
-  },
-]
-
-const mockCustomers = [
-  {
-    id: 'c1',
-    email: 'john.doe@email.com',
-    fullName: 'John Doe',
-  },
-]
-
-// Mock delay helper
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+// ============================================================================
+// AUTH API - Actual API calls to backend
+// httpClient interceptor already returns response.data, so we work with data directly
+// ============================================================================
 
 const authApi = {
-  // Non-customer portal login
+  // Non-customer portal login (Agent/Broker/Admin)
   async login(email, password) {
-    if (MOCK_MODE) {
-      await delay(800)
-      const user = mockUsers.find((u) => u.email === email && u.password === password)
-      if (user) {
-        return { requiresOtp: true }
-      }
-      throw new Error('Invalid credentials')
+    const data = await httpClient.post('/auth/login', { email, password })
+    // Backend returns { requiresOtp, otpToken, accessToken, refreshToken, user }
+    // If OTP is not required (direct login), save tokens immediately
+    if (data.accessToken) {
+      localStorage.setItem('token', data.accessToken)
+      localStorage.setItem('refreshToken', data.refreshToken)
+      localStorage.setItem('user', JSON.stringify(data.user))
     }
-    return httpClient.post('/auth/login', { email, password })
+    return data
   },
 
-  async verifyOtp(email, otp) {
-    if (MOCK_MODE) {
-      await delay(600)
-      const user = mockUsers.find((u) => u.email === email)
-      if (user && otp === '123456') {
-        const token = `mock-token-${Date.now()}`
-        return {
-          token,
-          expiresAt: new Date(Date.now() + 3600000).toISOString(),
-          user: {
-            id: user.id,
-            displayName: user.displayName,
-            role: user.role,
-          },
-        }
-      }
-      throw new Error('Invalid OTP')
+  async verifyOtp(otpToken, otp) {
+    // Note: Current backend doesn't have OTP for user login, 
+    // but we keep this for future implementation
+    // For now, login returns tokens directly
+    const data = await httpClient.post('/auth/verify-login-otp', { 
+      otpToken, 
+      otpCode: otp 
+    })
+    if (data.accessToken) {
+      localStorage.setItem('token', data.accessToken)
+      localStorage.setItem('refreshToken', data.refreshToken)
+      localStorage.setItem('user', JSON.stringify(data.user))
     }
-    return httpClient.post('/auth/verify-otp', { email, otp })
+    return data
   },
 
-  // Customer portal login
-  async requestCustomerOtp(email) {
-    if (MOCK_MODE) {
-      await delay(500)
-      const customer = mockCustomers.find((c) => c.email === email)
-      if (customer) {
-        console.log('Mock OTP: 123456')
-        return { success: true }
-      }
-      throw new Error('Customer not found')
-    }
-    return httpClient.post('/customer-auth/request-otp', { email })
+  async refreshToken() {
+    const refreshToken = localStorage.getItem('refreshToken')
+    if (!refreshToken) throw new Error('No refresh token')
+    
+    const data = await httpClient.post('/auth/refresh', { refreshToken })
+    localStorage.setItem('token', data.accessToken)
+    localStorage.setItem('refreshToken', data.refreshToken)
+    return data
   },
 
-  async verifyCustomerOtp(email, otp) {
-    if (MOCK_MODE) {
-      await delay(600)
-      const customer = mockCustomers.find((c) => c.email === email)
-      if (customer && otp === '123456') {
-        const token = `mock-customer-token-${Date.now()}`
-        return {
-          token,
-          expiresAt: new Date(Date.now() + 3600000).toISOString(),
-          customer: {
-            id: customer.id,
-            fullName: customer.fullName,
-          },
-        }
-      }
-      throw new Error('Invalid OTP')
+  async getCurrentUser() {
+    return await httpClient.get('/auth/me')
+  },
+
+  // Customer portal login via OTP
+  async requestCustomerOtp(email, phone = null) {
+    return await httpClient.post('/customer-auth/request-otp', { 
+      email: email || null,
+      phone: phone || null
+    })
+  },
+
+  async verifyCustomerOtp(otpToken, code) {
+    const data = await httpClient.post('/customer-auth/verify-otp', { 
+      otpToken, 
+      code 
+    })
+    if (data.accessToken) {
+      localStorage.setItem('customerToken', data.accessToken)
+      localStorage.setItem('customerRefreshToken', data.refreshToken)
+      localStorage.setItem('customer', JSON.stringify(data.customer))
     }
-    return httpClient.post('/customer-auth/verify-otp', { email, otp })
+    return data
+  },
+
+  async refreshCustomerToken() {
+    const refreshToken = localStorage.getItem('customerRefreshToken')
+    if (!refreshToken) throw new Error('No refresh token')
+    
+    const data = await httpClient.post('/customer-auth/refresh', { refreshToken })
+    localStorage.setItem('customerToken', data.accessToken)
+    localStorage.setItem('customerRefreshToken', data.refreshToken)
+    return data
+  },
+
+  async getCurrentCustomer() {
+    return await httpClient.get('/customer-auth/me')
   },
 
   logout() {
+    // Clear all auth data
     localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
     localStorage.removeItem('customerToken')
+    localStorage.removeItem('customerRefreshToken')
     localStorage.removeItem('customer')
+    
+    // Call backend logout to invalidate refresh token
+    httpClient.post('/auth/logout').catch(() => {})
+  },
+
+  // Helper to get stored user/customer
+  getStoredUser() {
+    const user = localStorage.getItem('user')
+    return user ? JSON.parse(user) : null
+  },
+
+  getStoredCustomer() {
+    const customer = localStorage.getItem('customer')
+    return customer ? JSON.parse(customer) : null
+  },
+
+  isAuthenticated() {
+    return !!localStorage.getItem('token')
+  },
+
+  isCustomerAuthenticated() {
+    return !!localStorage.getItem('customerToken')
   },
 }
 
+export { authApi }
 export default authApi

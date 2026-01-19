@@ -21,8 +21,9 @@ import {
   ArrowRight,
 } from 'lucide-react'
 
-import { componentPresets, animations } from '../../shared/constants/designSystem'
-import { ComplianceBadge } from '../../shared/components/ComplianceBadges'
+import { componentPresets, animations } from '../../../shared/constants/designSystem'
+import { ComplianceBadge } from '../../../shared/components/ComplianceBadges'
+import { signingApi } from '../../../api/signingApi'
 
 /**
  * DocumentVerificationPage - Public verification portal
@@ -61,44 +62,32 @@ const DocumentVerificationPage = () => {
     setError(null)
     setResult(null)
 
-    // Simulate verification API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    // Mock verification result
-    // In production, this would call the backend verification API
-    const mockResults = {
-      'DEMO123': {
-        valid: true,
-        documentTitle: 'Home Insurance Proposal',
-        referenceNumber: 'PR-2025-0001',
-        signedAt: '2025-01-15T14:35:22Z',
-        signerName: 'Yiannis Kleanthous',
-        signerId: 'X1234567',
-        documentHash: 'a3f2b8c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1',
-        certificateIssuer: 'JCC Cyprus Trust Center',
-        timestampAuthority: 'FreeTSA.org',
-        eidasCompliance: true,
-      },
-      'PR20250001': {
-        valid: true,
-        documentTitle: 'Home Insurance Proposal',
-        referenceNumber: 'PR-2025-0001',
-        signedAt: '2025-01-15T14:35:22Z',
-        signerName: 'Yiannis Kleanthous',
-        signerId: 'X•••••67',
-        documentHash: 'a3f2b8c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1',
-        certificateIssuer: 'JCC Cyprus Trust Center',
-        timestampAuthority: 'FreeTSA.org',
-        eidasCompliance: true,
-      },
-    }
-
-    const normalizedCode = verificationCode.replace(/-/g, '').toUpperCase()
-    const foundResult = mockResults[normalizedCode] || mockResults[verificationCode]
-
-    if (foundResult) {
-      setResult(foundResult)
-    } else {
+    try {
+      // Call the verification API
+      const response = await signingApi.verifyDocument(verificationCode.trim())
+      
+      if (response && response.valid !== undefined) {
+        setResult(response)
+      } else if (response) {
+        // Transform API response to expected format if needed
+        setResult({
+          valid: true,
+          documentTitle: response.documentTitle || response.name,
+          referenceNumber: response.referenceNumber || response.businessKey,
+          signedAt: response.signedAt,
+          signerName: response.signerName || response.customerName,
+          signerId: response.signerId,
+          documentHash: response.documentHash,
+          certificateIssuer: response.certificateIssuer,
+          timestampAuthority: response.timestampAuthority,
+          eidasCompliance: response.eidasCompliance,
+        })
+      } else {
+        setResult({ valid: false })
+      }
+    } catch (error) {
+      console.error('Verification failed:', error)
+      // If API call fails, show invalid result
       setResult({ valid: false })
     }
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Search,
@@ -24,192 +25,8 @@ import {
   Shield,
   Info,
 } from 'lucide-react'
-
-// Mock log data
-const mockLogs = [
-  {
-    id: 'log-001',
-    timestamp: '2025-01-17T14:32:15Z',
-    eventType: 'EMAIL_SENT',
-    severity: 'INFO',
-    message: 'Envelope invitation email sent successfully',
-    envelopeId: 'env-001',
-    envelopeRef: 'PR-2025-0001',
-    customerId: 'cust-001',
-    customerName: 'Yiannis Kleanthous',
-    userId: 'agent-001',
-    userName: 'Maria Georgiou',
-    metadata: {
-      emailTo: 'yiannis.k●●●●●@email.com',
-      emailSubject: 'Please sign your Home Insurance Proposal',
-      deliveryStatus: 'delivered',
-    },
-  },
-  {
-    id: 'log-002',
-    timestamp: '2025-01-17T14:30:00Z',
-    eventType: 'ENVELOPE_CREATED',
-    severity: 'INFO',
-    message: 'New envelope created via Portal',
-    envelopeId: 'env-001',
-    envelopeRef: 'PR-2025-0001',
-    customerId: 'cust-001',
-    customerName: 'Yiannis Kleanthous',
-    userId: 'agent-001',
-    userName: 'Maria Georgiou',
-    metadata: {
-      creationMethod: 'manual',
-      documentCount: 2,
-      envelopeType: 'HOME_INS_PROP',
-    },
-  },
-  {
-    id: 'log-003',
-    timestamp: '2025-01-17T14:15:22Z',
-    eventType: 'LOGIN_SUCCESS',
-    severity: 'INFO',
-    message: 'User logged in successfully',
-    userId: 'agent-001',
-    userName: 'Maria Georgiou',
-    metadata: {
-      ipAddress: '82.116.198.45',
-      userAgent: 'Chrome 120.0 on Windows 11',
-      location: 'Nicosia, Cyprus',
-    },
-  },
-  {
-    id: 'log-004',
-    timestamp: '2025-01-17T13:45:00Z',
-    eventType: 'ENVELOPE_VIEWED',
-    severity: 'INFO',
-    message: 'Customer opened envelope link',
-    envelopeId: 'env-002',
-    envelopeRef: 'PR-2025-0002',
-    customerId: 'cust-002',
-    customerName: 'Charis Constantinou',
-    metadata: {
-      ipAddress: '82.116.205.127',
-      userAgent: 'Safari 17.1 on macOS',
-      location: 'Limassol, Cyprus',
-    },
-  },
-  {
-    id: 'log-005',
-    timestamp: '2025-01-17T12:30:45Z',
-    eventType: 'SMS_SENT',
-    severity: 'INFO',
-    message: 'OTP SMS sent for verification',
-    envelopeId: 'env-002',
-    envelopeRef: 'PR-2025-0002',
-    customerId: 'cust-002',
-    customerName: 'Charis Constantinou',
-    metadata: {
-      smsTo: '+357 99 ●●● 321',
-      otpPurpose: 'signature_verification',
-      deliveryStatus: 'delivered',
-    },
-  },
-  {
-    id: 'log-006',
-    timestamp: '2025-01-17T12:31:20Z',
-    eventType: 'OTP_VERIFIED',
-    severity: 'INFO',
-    message: 'OTP verified successfully',
-    envelopeId: 'env-002',
-    envelopeRef: 'PR-2025-0002',
-    customerId: 'cust-002',
-    customerName: 'Charis Constantinou',
-    metadata: {
-      verificationTime: '35 seconds',
-    },
-  },
-  {
-    id: 'log-007',
-    timestamp: '2025-01-17T12:32:00Z',
-    eventType: 'ENVELOPE_SIGNED',
-    severity: 'INFO',
-    message: 'Customer completed signing',
-    envelopeId: 'env-002',
-    envelopeRef: 'PR-2025-0002',
-    customerId: 'cust-002',
-    customerName: 'Charis Constantinou',
-    metadata: {
-      signatureMethod: 'draw',
-      documentsSignedCount: 2,
-      ipAddress: '82.116.205.127',
-    },
-  },
-  {
-    id: 'log-008',
-    timestamp: '2025-01-17T11:00:00Z',
-    eventType: 'API_CALL',
-    severity: 'INFO',
-    message: 'Envelope created via API',
-    envelopeId: 'env-003',
-    envelopeRef: 'PR-2025-0003',
-    metadata: {
-      apiClient: 'Navins Integration',
-      endpoint: 'POST /api/envelopes',
-      responseCode: 201,
-    },
-  },
-  {
-    id: 'log-009',
-    timestamp: '2025-01-17T10:45:00Z',
-    eventType: 'LOGIN_FAILED',
-    severity: 'WARNING',
-    message: 'Failed login attempt',
-    metadata: {
-      attemptedEmail: 'unknown@example.com',
-      ipAddress: '192.168.1.100',
-      reason: 'Invalid credentials',
-      failedAttempts: 3,
-    },
-  },
-  {
-    id: 'log-010',
-    timestamp: '2025-01-17T10:00:00Z',
-    eventType: 'EMAIL_FAILED',
-    severity: 'ERROR',
-    message: 'Failed to send reminder email',
-    envelopeId: 'env-004',
-    envelopeRef: 'PR-2025-0004',
-    customerId: 'cust-003',
-    customerName: 'Cyprus Trading Ltd',
-    metadata: {
-      emailTo: 'bounced@invalid-domain.com',
-      errorCode: 'BOUNCE',
-      errorMessage: 'Mailbox not found',
-    },
-  },
-  {
-    id: 'log-011',
-    timestamp: '2025-01-17T09:30:00Z',
-    eventType: 'CERTIFICATE_CHECK',
-    severity: 'INFO',
-    message: 'eSeal certificate health check passed',
-    metadata: {
-      certificateName: 'JenusSign-eSeal-Certificate',
-      daysUntilExpiry: 423,
-      status: 'valid',
-    },
-  },
-  {
-    id: 'log-012',
-    timestamp: '2025-01-16T16:00:00Z',
-    eventType: 'ENVELOPE_EXPIRED',
-    severity: 'WARNING',
-    message: 'Envelope expired without signature',
-    envelopeId: 'env-old-001',
-    envelopeRef: 'PR-2024-0099',
-    customerId: 'cust-005',
-    customerName: 'Stavros Michaelides',
-    metadata: {
-      expiryReason: 'timeout',
-      daysOverdue: 0,
-    },
-  },
-]
+import { logsApi } from '../../../api/logsApi'
+import Loading from '../../../shared/components/Loading'
 
 const eventTypeConfig = {
   EMAIL_SENT: { icon: Mail, color: 'text-blue-600', bg: 'bg-blue-100', label: 'Email Sent' },
@@ -237,7 +54,6 @@ const severityConfig = {
 }
 
 const SystemLogsPage = () => {
-  const [logs, setLogs] = useState(mockLogs)
   const [searchQuery, setSearchQuery] = useState('')
   const [eventFilter, setEventFilter] = useState('ALL')
   const [severityFilter, setSeverityFilter] = useState('ALL')
@@ -246,26 +62,49 @@ const SystemLogsPage = () => {
   const [expandedLogId, setExpandedLogId] = useState(null)
   const logsPerPage = 10
 
-  const filteredLogs = logs.filter((log) => {
-    const matchesSearch =
-      log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.envelopeRef?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.userName?.toLowerCase().includes(searchQuery.toLowerCase())
-
-    const matchesEvent = eventFilter === 'ALL' || log.eventType === eventFilter
-    const matchesSeverity = severityFilter === 'ALL' || log.severity === severityFilter
-
-    return matchesSearch && matchesEvent && matchesSeverity
+  // Fetch logs from API
+  const { data: logsData, isLoading, refetch } = useQuery({
+    queryKey: ['systemLogs', searchQuery, eventFilter, severityFilter, dateRange, currentPage],
+    queryFn: () => logsApi.getLogs({
+      search: searchQuery,
+      eventType: eventFilter,
+      severity: severityFilter,
+      fromDate: dateRange.from,
+      toDate: dateRange.to,
+      page: currentPage,
+      pageSize: logsPerPage,
+    }),
   })
 
-  const totalPages = Math.ceil(filteredLogs.length / logsPerPage)
-  const paginatedLogs = filteredLogs.slice(
-    (currentPage - 1) * logsPerPage,
-    currentPage * logsPerPage
-  )
+  // Transform API response to expected format
+  const logs = (logsData?.logs || logsData || []).map(log => ({
+    id: log.id,
+    timestamp: log.timestamp || log.createdAt,
+    eventType: log.eventType,
+    severity: log.severity || 'INFO',
+    message: log.message,
+    envelopeId: log.envelopeId,
+    envelopeRef: log.envelopeRef || log.businessKey,
+    customerId: log.customerId,
+    customerName: log.customerName,
+    userId: log.userId,
+    userName: log.userName,
+    metadata: log.metadata || {},
+  }))
+
+  const totalCount = logsData?.totalCount || logs.length
+  const totalPages = Math.ceil(totalCount / logsPerPage)
+  
+  // Client-side filtering as fallback if API doesn't support filtering
+  const filteredLogs = logs
+
+  // Calculate stats from current data
+  const infoCount = logs.filter(l => l.severity === 'INFO').length
+  const warningCount = logs.filter(l => l.severity === 'WARNING').length
+  const errorCount = logs.filter(l => l.severity === 'ERROR').length
 
   const formatTimestamp = (timestamp) => {
+    if (!timestamp) return { date: '—', time: '—' }
     const date = new Date(timestamp)
     return {
       date: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
@@ -273,18 +112,41 @@ const SystemLogsPage = () => {
     }
   }
 
-  const handleExport = () => {
-    // Would generate CSV/JSON export
-    alert('Export functionality would generate a CSV/JSON file with filtered logs')
+  const handleExport = async () => {
+    try {
+      const blob = await logsApi.exportLogs({
+        search: searchQuery,
+        eventType: eventFilter,
+        severity: severityFilter,
+        fromDate: dateRange.from,
+        toDate: dateRange.to,
+      }, 'csv')
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `system-logs-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('Export functionality is not yet available')
+    }
   }
 
   const handleRefresh = () => {
-    // Would refresh from API
-    setLogs([...mockLogs])
+    refetch()
   }
 
   const getEventConfig = (eventType) => {
     return eventTypeConfig[eventType] || { icon: Info, color: 'text-gray-600', bg: 'bg-gray-100', label: eventType }
+  }
+
+  if (isLoading) {
+    return <Loading message="Loading system logs..." />
   }
 
   return (
@@ -383,7 +245,7 @@ const SystemLogsPage = () => {
             <FileText className="w-4 h-4" />
             Total Events
           </div>
-          <p className="text-2xl font-bold text-gray-900">{filteredLogs.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{totalCount}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
@@ -391,7 +253,7 @@ const SystemLogsPage = () => {
             Info
           </div>
           <p className="text-2xl font-bold text-blue-600">
-            {filteredLogs.filter(l => l.severity === 'INFO').length}
+            {infoCount}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -400,7 +262,7 @@ const SystemLogsPage = () => {
             Warnings
           </div>
           <p className="text-2xl font-bold text-amber-600">
-            {filteredLogs.filter(l => l.severity === 'WARNING').length}
+            {warningCount}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -409,7 +271,7 @@ const SystemLogsPage = () => {
             Errors
           </div>
           <p className="text-2xl font-bold text-red-600">
-            {filteredLogs.filter(l => l.severity === 'ERROR').length}
+            {errorCount}
           </p>
         </div>
       </div>
@@ -441,11 +303,11 @@ const SystemLogsPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {paginatedLogs.map((log, index) => {
+              {filteredLogs.map((log, index) => {
                 const eventConfig = getEventConfig(log.eventType)
                 const EventIcon = eventConfig.icon
                 const { date, time } = formatTimestamp(log.timestamp)
-                const sevConfig = severityConfig[log.severity]
+                const sevConfig = severityConfig[log.severity] || severityConfig.INFO
 
                 return (
                   <React.Fragment key={log.id}>
@@ -542,7 +404,7 @@ const SystemLogsPage = () => {
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
           <p className="text-sm text-gray-500">
-            Showing {((currentPage - 1) * logsPerPage) + 1} to {Math.min(currentPage * logsPerPage, filteredLogs.length)} of {filteredLogs.length} results
+            Showing {((currentPage - 1) * logsPerPage) + 1} to {Math.min(currentPage * logsPerPage, totalCount)} of {totalCount} results
           </p>
           <div className="flex items-center gap-2">
             <button

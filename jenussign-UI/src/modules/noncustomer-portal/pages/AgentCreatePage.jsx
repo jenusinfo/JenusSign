@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -9,18 +9,16 @@ import {
   Building2,
   Save,
   Award,
+  Loader2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const mockBrokers = [
-  { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
-  { id: 'broker-002', name: 'Mediterranean Insurance Services' },
-  { id: 'broker-003', name: 'Island Risk Solutions' },
-]
+import { usersApi } from '../../../api/usersApi'
 
 const AgentCreatePage = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [brokers, setBrokers] = useState([])
+  const [loadingBrokers, setLoadingBrokers] = useState(true)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -30,6 +28,22 @@ const AgentCreatePage = () => {
     brokerId: '',
     notes: '',
   })
+
+  // Fetch brokers on mount
+  useEffect(() => {
+    const fetchBrokers = async () => {
+      try {
+        const data = await usersApi.getBrokers()
+        setBrokers(data)
+      } catch (error) {
+        console.error('Failed to load brokers:', error)
+        toast.error('Failed to load brokers')
+      } finally {
+        setLoadingBrokers(false)
+      }
+    }
+    fetchBrokers()
+  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -188,9 +202,10 @@ const AgentCreatePage = () => {
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                   required
+                  disabled={loadingBrokers}
                 >
-                  <option value="">Select a broker...</option>
-                  {mockBrokers.map(broker => (
+                  <option value="">{loadingBrokers ? 'Loading brokers...' : 'Select a broker...'}</option>
+                  {brokers.map(broker => (
                     <option key={broker.id} value={broker.id}>{broker.name}</option>
                   ))}
                 </select>
@@ -235,7 +250,7 @@ const AgentCreatePage = () => {
               <div>
                 <p className="text-sm text-gray-500">Broker</p>
                 <p className="font-medium text-gray-900">
-                  {mockBrokers.find(b => b.id === formData.brokerId)?.name || '—'}
+                  {brokers.find(b => b.id === formData.brokerId)?.name || '—'}
                 </p>
               </div>
             </div>

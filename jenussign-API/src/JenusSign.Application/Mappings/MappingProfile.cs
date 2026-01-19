@@ -1,6 +1,7 @@
 using AutoMapper;
 using JenusSign.Application.DTOs;
 using JenusSign.Core.Entities;
+using System.Linq;
 
 namespace JenusSign.Application.Mappings;
 
@@ -38,12 +39,31 @@ public class MappingProfile : Profile
 
         // Customer mappings
         CreateMap<Customer, CustomerDto>()
-            .ForMember(d => d.DisplayName, opt => opt.MapFrom(s => s.DisplayName))
-            .ForMember(d => d.AgentName, opt => opt.MapFrom(s => s.Agent.FullName))
-            .ForMember(d => d.AgentBusinessKey, opt => opt.MapFrom(s => s.Agent.BusinessKey))
-            .ForMember(d => d.BrokerId, opt => opt.MapFrom(s => s.Agent.BrokerId))
-            .ForMember(d => d.BrokerName, opt => opt.MapFrom(s => s.Agent.Broker != null ? s.Agent.Broker.FullName : null))
-            .ForMember(d => d.BrokerBusinessKey, opt => opt.MapFrom(s => s.Agent.Broker != null ? s.Agent.Broker.BusinessKey : null));
+            .ConstructUsing(s => new CustomerDto(
+                s.Id,
+                s.BusinessKey,
+                s.CustomerType,
+                s.FirstName,
+                s.LastName,
+                s.DisplayName,
+                s.CompanyName,
+                s.RegistrationNumber,
+                s.Email,
+                s.Phone,
+                s.Address,
+                s.City,
+                s.PostalCode,
+                s.Country,
+                s.IdNumber,
+                s.AgentId,
+                s.Agent != null ? s.Agent.FullName : string.Empty,
+                s.Agent != null ? s.Agent.BusinessKey : string.Empty,
+                s.Agent != null ? s.Agent.BrokerId : null,
+                s.Agent != null && s.Agent.Broker != null ? s.Agent.Broker.FullName : null,
+                s.Agent != null && s.Agent.Broker != null ? s.Agent.Broker.BusinessKey : null,
+                s.NavinsCustomerId,
+                s.CreatedAt
+            ));
 
         CreateMap<CreateCustomerRequest, Customer>()
             .ForMember(d => d.Id, opt => opt.Ignore())
@@ -89,11 +109,24 @@ public class MappingProfile : Profile
 
         // Envelope mappings
         CreateMap<Envelope, EnvelopeDto>()
-            .ForMember(d => d.CustomerName, opt => opt.MapFrom(s => s.Customer.DisplayName))
-            .ForMember(d => d.CustomerBusinessKey, opt => opt.MapFrom(s => s.Customer.BusinessKey))
-            .ForMember(d => d.AgentName, opt => opt.MapFrom(s => s.Agent.FullName))
-            .ForMember(d => d.AgentBusinessKey, opt => opt.MapFrom(s => s.Agent.BusinessKey))
-            .ForMember(d => d.Documents, opt => opt.MapFrom(s => s.Documents));
+            .ConstructUsing((s, ctx) => new EnvelopeDto(
+                s.Id,
+                s.BusinessKey,
+                s.Name,
+                s.Description,
+                s.Status,
+                s.CustomerId,
+                s.Customer != null ? s.Customer.DisplayName : string.Empty,
+                s.Customer != null ? s.Customer.BusinessKey : string.Empty,
+                s.AgentId,
+                s.Agent != null ? s.Agent.FullName : string.Empty,
+                s.Agent != null ? s.Agent.BusinessKey : string.Empty,
+                s.Documents != null ? s.Documents.Count : 0,
+                s.Documents != null ? ctx.Mapper.Map<IEnumerable<DocumentInfoDto>>(s.Documents) : Enumerable.Empty<DocumentInfoDto>(),
+                s.ExpiresAt,
+                s.CustomerMessage,
+                s.CreatedAt
+            ));
 
         CreateMap<CreateEnvelopeRequest, Envelope>()
             .ForMember(d => d.Id, opt => opt.Ignore())
@@ -101,5 +134,27 @@ public class MappingProfile : Profile
             .ForMember(d => d.AgentId, opt => opt.Ignore())
             .ForMember(d => d.Status, opt => opt.MapFrom(_ => Core.Enums.ProposalStatus.Draft))
             .ForMember(d => d.CreatedAt, opt => opt.Ignore());
+
+        // SystemLog mappings
+        CreateMap<SystemLog, SystemLogDto>()
+            .ForMember(d => d.Metadata, opt => opt.MapFrom<MetadataResolver>());
+    }
+}
+
+public class MetadataResolver : IValueResolver<SystemLog, SystemLogDto, Dictionary<string, object>?>
+{
+    public Dictionary<string, object>? Resolve(SystemLog source, SystemLogDto destination, Dictionary<string, object>? destMember, ResolutionContext context)
+    {
+        if (string.IsNullOrEmpty(source.Metadata))
+            return null;
+        
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(source.Metadata);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

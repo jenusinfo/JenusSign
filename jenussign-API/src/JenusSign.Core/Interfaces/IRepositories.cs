@@ -84,6 +84,7 @@ public interface IUnitOfWork : IDisposable
     IRepository<Envelope> Envelopes { get; }
     IRepository<AuditEvent> AuditEvents { get; }
     IRepository<OtpCode> OtpCodes { get; }
+    IRepository<SystemLog> SystemLogs { get; }
     
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     Task BeginTransactionAsync(CancellationToken cancellationToken = default);

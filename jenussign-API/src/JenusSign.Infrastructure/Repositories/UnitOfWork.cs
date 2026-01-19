@@ -20,6 +20,7 @@ public class UnitOfWork : IUnitOfWork
     private IRepository<Envelope>? _envelopes;
     private IRepository<AuditEvent>? _auditEvents;
     private IRepository<OtpCode>? _otpCodes;
+    private IRepository<SystemLog>? _systemLogs;
 
     public UnitOfWork(JenusSignDbContext context)
     {
@@ -33,6 +34,7 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<Envelope> Envelopes => _envelopes ??= new Repository<Envelope>(_context);
     public IRepository<AuditEvent> AuditEvents => _auditEvents ??= new Repository<AuditEvent>(_context);
     public IRepository<OtpCode> OtpCodes => _otpCodes ??= new Repository<OtpCode>(_context);
+    public IRepository<SystemLog> SystemLogs => _systemLogs ??= new Repository<SystemLog>(_context);
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

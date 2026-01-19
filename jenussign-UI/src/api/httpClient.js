@@ -11,10 +11,30 @@ const httpClient = axios.create({
   },
 })
 
-// Request interceptor
+// Request interceptor - handles both agent and customer tokens
 httpClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    // Get persisted auth state from localStorage (Zustand persist)
+    const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')?.state
+    
+    // Priority: customerToken for customer routes, agentToken for portal routes
+    const isCustomerRoute = config.url?.includes('/customer') || 
+                           config.url?.includes('/signing') ||
+                           config.url?.includes('/envelopes/customer')
+    
+    let token = null
+    if (isCustomerRoute && authState?.customerToken) {
+      token = authState.customerToken
+    } else if (authState?.agentToken) {
+      token = authState.agentToken
+    } else if (authState?.token) {
+      // Legacy fallback
+      token = authState.token
+    } else {
+      // Final fallback to simple token storage
+      token = localStorage.getItem('token')
+    }
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -30,12 +50,37 @@ httpClient.interceptors.response.use(
     const message = error.response?.data?.message || error.message || 'An error occurred'
     
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/portal/login'
+      // Determine which portal user is on based on URL
+      const currentPath = window.location.pathname
+      if (currentPath.startsWith('/customer')) {
+        // Clear customer auth
+        const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')
+        if (authState.state) {
+          authState.state.customerToken = null
+          authState.state.customer = null
+          localStorage.setItem('auth-storage', JSON.stringify(authState))
+        }
+        window.location.href = '/customer/login'
+      } else {
+        // Clear agent/portal auth
+        const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')
+        if (authState.state) {
+          authState.state.agentToken = null
+          authState.state.agent = null
+          authState.state.token = null
+          authState.state.user = null
+          localStorage.setItem('auth-storage', JSON.stringify(authState))
+        }
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/portal/login'
+      }
     }
     
-    toast.error(message)
+    // Don't show toast for 401 (redirect handles it)
+    if (error.response?.status !== 401) {
+      toast.error(message)
+    }
     return Promise.reject(error)
   }
 )

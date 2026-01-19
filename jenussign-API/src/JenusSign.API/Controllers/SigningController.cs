@@ -67,14 +67,50 @@ public class SigningController : ControllerBase
         await RecordAuditEvent(session, ConsentAction.DocumentViewed, "Customer accessed signing session");
 
         var documents = new List<DocumentInfoDto>();
+        string? reference = null;
+        string? title = null;
+        SigningAgentInfoDto? agentInfo = null;
+
         if (session.Proposal != null)
         {
             documents.Add(_mapper.Map<DocumentInfoDto>(session.Proposal));
+            reference = session.Proposal.ReferenceNumber;
+            title = session.Proposal.Title;
+            
+            if (session.Proposal.Agent != null)
+            {
+                agentInfo = new SigningAgentInfoDto(
+                    Name: session.Proposal.Agent.FullName,
+                    Company: null,
+                    Email: session.Proposal.Agent.Email
+                );
+            }
         }
         else if (session.Envelope != null)
         {
             documents.AddRange(session.Envelope.Documents.Select(d => _mapper.Map<DocumentInfoDto>(d)));
+            reference = session.Envelope.BusinessKey;
+            title = session.Envelope.Name;
+            
+            if (session.Envelope.Agent != null)
+            {
+                agentInfo = new SigningAgentInfoDto(
+                    Name: session.Envelope.Agent.FullName,
+                    Company: null,
+                    Email: session.Envelope.Agent.Email
+                );
+            }
         }
+
+        // Build masked customer info for verification display
+        var customer = session.Customer;
+        var customerInfo = new CustomerVerificationInfoDto(
+            FirstName: customer.FirstName ?? customer.DisplayName.Split(' ').FirstOrDefault() ?? "",
+            LastName: customer.LastName ?? customer.DisplayName.Split(' ').LastOrDefault() ?? "",
+            MaskedEmail: MaskEmail(customer.Email),
+            MaskedPhone: customer.Phone != null ? MaskPhone(customer.Phone) : null,
+            IdNumberLast4: customer.IdNumber?.Length >= 4 ? customer.IdNumber[^4..] : null
+        );
 
         var canSign = session.IdentityVerified && session.OtpVerified && 
                       session.Status != ProposalStatus.Signed;
@@ -83,13 +119,47 @@ public class SigningController : ControllerBase
             SessionId: session.Id,
             CustomerName: session.Customer.DisplayName,
             CustomerEmail: session.Customer.Email,
+            CustomerPhone: session.Customer.Phone,
             Status: session.Status,
             ExpiresAt: session.ExpiresAt,
             Documents: documents,
             IdentityVerified: session.IdentityVerified,
             OtpVerified: session.OtpVerified,
-            CanSign: canSign
+            CanSign: canSign,
+            Reference: reference,
+            Title: title,
+            DocumentCount: documents.Count,
+            Agent: agentInfo,
+            CustomerInfo: customerInfo
         ));
+    }
+
+    /// <summary>
+    /// Mask email for display (e.g., yi***@email.com)
+    /// </summary>
+    private static string MaskEmail(string email)
+    {
+        var parts = email.Split('@');
+        if (parts.Length != 2 || parts[0].Length < 2)
+            return "***@***.com";
+        
+        var local = parts[0];
+        var masked = local.Length <= 2 
+            ? local[0] + "***" 
+            : local[..2] + new string('●', Math.Min(local.Length - 2, 5));
+        
+        return $"{masked}@{parts[1]}";
+    }
+
+    /// <summary>
+    /// Mask phone for display (e.g., +357 99 ●●● 456)
+    /// </summary>
+    private static string MaskPhone(string phone)
+    {
+        if (phone.Length < 6)
+            return "●●●●●●";
+        
+        return phone[..^3] + " ●●● " + phone[^3..];
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Plus,
@@ -14,86 +15,53 @@ import {
   CheckCircle2,
   Filter,
 } from 'lucide-react'
-
-const mockUsers = [
-  {
-    id: 'user-001',
-    name: 'Admin User',
-    email: 'admin@hydrainsurance.com.cy',
-    phone: '+357 22 100 100',
-    role: 'administrator',
-    department: 'IT',
-    status: 'active',
-    assignedBrokers: [],
-    assignedAgents: [],
-    lastLogin: '2025-01-17T10:00:00Z',
-    createdAt: '2020-01-01T00:00:00Z',
-  },
-  {
-    id: 'emp-001',
-    name: 'Elena Christodoulou',
-    email: 'elena.c@hydrainsurance.com.cy',
-    phone: '+357 99 555 666',
-    role: 'employee',
-    department: 'Sales',
-    status: 'active',
-    assignedBrokers: [{ id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' }],
-    assignedAgents: [{ id: 'agent-001', name: 'Maria Georgiou' }],
-    lastLogin: '2025-01-17T08:30:00Z',
-    createdAt: '2022-03-15T10:00:00Z',
-  },
-  {
-    id: 'emp-002',
-    name: 'Nikos Stavrou',
-    email: 'nikos.s@hydrainsurance.com.cy',
-    phone: '+357 99 777 888',
-    role: 'employee',
-    department: 'Underwriting',
-    status: 'active',
-    assignedBrokers: [{ id: 'broker-002', name: 'Mediterranean Insurance Services' }],
-    assignedAgents: [],
-    lastLogin: '2025-01-16T14:00:00Z',
-    createdAt: '2021-06-20T09:00:00Z',
-  },
-  {
-    id: 'emp-003',
-    name: 'Anna Kyriacou',
-    email: 'anna.k@hydrainsurance.com.cy',
-    phone: '+357 99 999 000',
-    role: 'employee',
-    department: 'Claims',
-    status: 'active',
-    assignedBrokers: [],
-    assignedAgents: [{ id: 'agent-002', name: 'Andreas Papadopoulos' }, { id: 'agent-003', name: 'Nikos Konstantinou' }],
-    lastLogin: '2025-01-17T09:15:00Z',
-    createdAt: '2023-01-10T11:00:00Z',
-  },
-  {
-    id: 'emp-004',
-    name: 'George Demetriou',
-    email: 'george.d@hydrainsurance.com.cy',
-    phone: '+357 99 111 222',
-    role: 'employee',
-    department: 'Operations',
-    status: 'inactive',
-    assignedBrokers: [],
-    assignedAgents: [],
-    lastLogin: '2024-12-01T16:00:00Z',
-    createdAt: '2022-08-01T08:00:00Z',
-  },
-]
+import { usersApi } from '../../../api/usersApi'
+import Loading from '../../../shared/components/Loading'
 
 const roleConfig = {
+  Admin: { label: 'Admin', color: 'bg-red-100 text-red-700', icon: Shield },
+  Employee: { label: 'Employee', color: 'bg-blue-100 text-blue-700', icon: UserCircle },
   administrator: { label: 'Admin', color: 'bg-red-100 text-red-700', icon: Shield },
   employee: { label: 'Employee', color: 'bg-blue-100 text-blue-700', icon: UserCircle },
+  admin: { label: 'Admin', color: 'bg-red-100 text-red-700', icon: Shield },
 }
+
+// Default role config for unknown roles
+const defaultRoleConfig = { label: 'User', color: 'bg-gray-100 text-gray-700', icon: UserCircle }
 
 const UserManagementPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
-  const filteredUsers = mockUsers.filter((user) => {
+  // Fetch users from API (Admin and Employee roles only)
+  const { data: usersData, isLoading } = useQuery({
+    queryKey: ['users', 'management'],
+    queryFn: () => usersApi.getUsers({ pageSize: 100 }),
+  })
+
+  if (isLoading) {
+    return <Loading message="Loading users..." />
+  }
+
+  // Transform users to expected format (filter out Agent and Broker roles)
+  const users = (usersData?.users || [])
+    .filter(u => u.role === 'Admin' || u.role === 'Employee')
+    .map(user => ({
+      id: user.id,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      email: user.email || '',
+      phone: user.phone || '',
+      role: user.role?.toLowerCase() || 'employee',
+      department: user.department || 'General',
+      status: user.isActive ? 'active' : 'inactive',
+      assignedBrokers: [],
+      assignedAgents: [],
+      lastLogin: user.lastLoginAt,
+      createdAt: user.createdAt,
+    }))
+
+  const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -106,6 +74,7 @@ const UserManagementPage = () => {
   })
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'Never'
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'short',
@@ -188,7 +157,7 @@ const UserManagementPage = () => {
             </div>
           ) : (
             filteredUsers.map((user, index) => {
-              const roleInfo = roleConfig[user.role]
+              const roleInfo = roleConfig[user.role] || defaultRoleConfig
               const RoleIcon = roleInfo.icon
               const totalAssignments = user.assignedBrokers.length + user.assignedAgents.length
               
@@ -281,24 +250,24 @@ const UserManagementPage = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Users</p>
-          <p className="text-2xl font-bold text-gray-900">{mockUsers.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{users.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Administrators</p>
           <p className="text-2xl font-bold text-red-600">
-            {mockUsers.filter(u => u.role === 'administrator').length}
+            {users.filter(u => u.role === 'administrator' || u.role === 'admin').length}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Employees</p>
           <p className="text-2xl font-bold text-blue-600">
-            {mockUsers.filter(u => u.role === 'employee').length}
+            {users.filter(u => u.role === 'employee').length}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Active</p>
           <p className="text-2xl font-bold text-green-600">
-            {mockUsers.filter(u => u.status === 'active').length}
+            {users.filter(u => u.status === 'active').length}
           </p>
         </div>
       </div>

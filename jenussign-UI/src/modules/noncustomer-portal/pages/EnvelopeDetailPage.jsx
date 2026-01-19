@@ -26,91 +26,8 @@ import {
   Printer,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-// Mock envelope data
-const mockEnvelopeData = {
-  'env-001': {
-    id: 'env-001',
-    reference: 'PR-2025-0001',
-    title: 'Home Insurance Proposal',
-    status: 'PENDING',
-    customer: {
-      name: 'Yiannis Kleanthous',
-      email: 'yiannis.kleanthous@hydrainsurance.com.cy',
-      phone: '+357 99 123 456',
-      idNumber: 'X1234567',
-    },
-    documents: [
-      { id: 'doc-1', name: 'Home Insurance Proposal', pages: 4, url: '/samples/home_insurance_proposal_PR20250001.pdf' },
-      { id: 'doc-2', name: 'Terms & Conditions', pages: 3, url: '/samples/terms-and-conditions.pdf' },
-      { id: 'doc-3', name: 'Privacy Policy', pages: 2, url: '/samples/privacy-policy.pdf' },
-    ],
-    token: 'demo1',
-    signingLink: `${window.location.origin}/customer/verify/demo1`,
-    createdAt: '2025-01-15T10:00:00Z',
-    expiresAt: '2026-12-31T23:59:59Z',
-    sentAt: null,
-    viewedAt: null,
-    signedAt: null,
-    createdBy: { name: 'Admin User', email: 'admin@insurance.com' },
-  },
-  'env-002': {
-    id: 'env-002',
-    reference: 'PR-2025-0002',
-    title: 'Motor Insurance Proposal',
-    status: 'PENDING',
-    customer: {
-      name: 'Charis Constantinou',
-      email: 'charis.constantinou@hydrainsurance.com.cy',
-      phone: '+357 99 654 321',
-      idNumber: 'M7654321',
-    },
-    documents: [
-      { id: 'doc-1', name: 'Motor Insurance Proposal', pages: 4, url: '/samples/motor_insurance_proposal_PR20250002.pdf' },
-      { id: 'doc-2', name: 'Terms & Conditions', pages: 3, url: '/samples/terms-and-conditions.pdf' },
-      { id: 'doc-3', name: 'Privacy Policy', pages: 2, url: '/samples/privacy-policy.pdf' },
-    ],
-    token: 'demo2',
-    signingLink: `${window.location.origin}/customer/verify/demo2`,
-    createdAt: '2025-01-14T09:30:00Z',
-    expiresAt: '2026-12-31T23:59:59Z',
-    sentAt: '2025-01-14T10:00:00Z',
-    viewedAt: null,
-    signedAt: null,
-    createdBy: { name: 'Admin User', email: 'admin@insurance.com' },
-  },
-  'env-003': {
-    id: 'env-003',
-    reference: 'PR-2025-0003',
-    title: 'Commercial Property Insurance',
-    status: 'COMPLETED',
-    customer: {
-      name: 'Cyprus Trading Ltd',
-      email: 'info@cyprustrading.com.cy',
-      phone: '+357 22 123 456',
-      idNumber: 'HE123456',
-    },
-    documents: [
-      { id: 'doc-1', name: 'Commercial Property Proposal', pages: 6, url: '/samples/demo-signed-esealed.pdf' },
-      { id: 'doc-2', name: 'Terms & Conditions', pages: 3, url: '/samples/terms-and-conditions.pdf' },
-    ],
-    token: 'demo3',
-    signingLink: `${window.location.origin}/customer/verify/demo3`,
-    createdAt: '2025-01-10T14:00:00Z',
-    expiresAt: '2026-12-31T23:59:59Z',
-    sentAt: '2025-01-10T14:30:00Z',
-    viewedAt: '2025-01-10T15:00:00Z',
-    signedAt: '2025-01-10T15:15:00Z',
-    createdBy: { name: 'Admin User', email: 'admin@insurance.com' },
-  },
-}
-
-// Also support old prop-XXX format
-const legacyMapping = {
-  'prop-001': 'env-001',
-  'prop-002': 'env-002',
-  'prop-003': 'env-003',
-}
+import { envelopesApi } from '../../../api/envelopesApi'
+import Loading from '../../../shared/components/Loading'
 
 const statusConfig = {
   PENDING: { label: 'Pending Signature', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
@@ -128,19 +45,54 @@ const EnvelopeDetailPage = () => {
   const [showActions, setShowActions] = useState(false)
 
   useEffect(() => {
-    // Simulate API call
-    const timer = setTimeout(() => {
-      // Check for legacy prop-XXX format
-      const actualId = legacyMapping[id] || id
-      const data = mockEnvelopeData[actualId]
-      
-      if (data) {
-        setEnvelope(data)
+    const fetchEnvelope = async () => {
+      try {
+        setLoading(true)
+        const data = await envelopesApi.getEnvelope(id)
+        console.log('Envelope data:', data) // Debug log
+        
+        if (!data) {
+          console.error('No envelope data returned')
+          setEnvelope(null)
+          return
+        }
+        
+        // Transform API response to match expected format
+        setEnvelope({
+          id: data.id,
+          reference: data.businessKey || '',
+          title: data.name || '',
+          status: data.status || 'Draft',
+          customer: {
+            name: data.customerName || '',
+            email: data.customerEmail || '',
+            phone: data.customerPhone || '',
+            idNumber: data.customerIdNumber || '',
+          },
+          documents: data.documents || [],
+          token: data.signingToken,
+          signingLink: data.signingUrl || `${window.location.origin}/customer/verify/${data.signingToken || data.id}`,
+          createdAt: data.createdAt,
+          expiresAt: data.expiresAt,
+          sentAt: data.sentAt,
+          viewedAt: data.viewedAt,
+          signedAt: data.signedAt,
+          createdBy: { name: data.agentName || '', email: data.agentEmail || '' },
+          customerMessage: data.customerMessage,
+          description: data.description,
+        })
+      } catch (error) {
+        console.error('Failed to fetch envelope:', error)
+        toast.error('Failed to load envelope details')
+        setEnvelope(null)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
-    }, 500)
+    }
 
-    return () => clearTimeout(timer)
+    if (id) {
+      fetchEnvelope()
+    }
   }, [id])
 
   const formatDate = (dateString) => {

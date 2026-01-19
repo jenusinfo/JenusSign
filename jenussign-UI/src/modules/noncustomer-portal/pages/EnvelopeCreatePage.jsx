@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { 
   ArrowLeft, 
   Upload, 
@@ -27,113 +28,39 @@ import {
   Info,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-// Mock Envelope Types (would come from API/settings)
-const ENVELOPE_TYPES = [
-  {
-    id: 'type-001',
-    name: 'Home Insurance Proposal',
-    code: 'HOME_INSURANCE',
-    category: 'Insurance',
-    description: 'Standard home insurance proposal with property details',
-    expiryDays: 30,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Insurance Proposal', required: true, allowedFormats: 'PDF', maxSizeMb: 10 },
-      { id: 'doc-2', name: 'Terms & Conditions', required: true, allowedFormats: 'PDF', maxSizeMb: 5 },
-      { id: 'doc-3', name: 'Privacy Policy', required: true, allowedFormats: 'PDF', maxSizeMb: 5 },
-    ],
-    verification: {
-      requireIdVerification: true,
-      requireFaceMatch: false,
-    },
-    autoIncludeDocs: ['terms-conditions', 'privacy-policy'],
-  },
-  {
-    id: 'type-002',
-    name: 'Motor Insurance Proposal',
-    code: 'MOTOR_INSURANCE',
-    category: 'Insurance',
-    description: 'Vehicle insurance proposal with driver and vehicle details',
-    expiryDays: 30,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Insurance Proposal', required: true, allowedFormats: 'PDF', maxSizeMb: 10 },
-      { id: 'doc-2', name: 'Vehicle Registration', required: true, allowedFormats: 'PDF,Images', maxSizeMb: 5 },
-      { id: 'doc-3', name: 'Driving License', required: false, allowedFormats: 'PDF,Images', maxSizeMb: 5 },
-      { id: 'doc-4', name: 'Terms & Conditions', required: true, allowedFormats: 'PDF', maxSizeMb: 5 },
-    ],
-    verification: {
-      requireIdVerification: true,
-      requireFaceMatch: true,
-    },
-    autoIncludeDocs: ['terms-conditions'],
-  },
-  {
-    id: 'type-003',
-    name: 'Commercial Property Insurance',
-    code: 'COMMERCIAL_PROPERTY',
-    category: 'Insurance',
-    description: 'Commercial property insurance for businesses',
-    expiryDays: 45,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Insurance Proposal', required: true, allowedFormats: 'PDF', maxSizeMb: 25 },
-      { id: 'doc-2', name: 'Business Registration', required: true, allowedFormats: 'PDF', maxSizeMb: 10 },
-      { id: 'doc-3', name: 'Property Valuation', required: false, allowedFormats: 'PDF', maxSizeMb: 25 },
-      { id: 'doc-4', name: 'Terms & Conditions', required: true, allowedFormats: 'PDF', maxSizeMb: 5 },
-      { id: 'doc-5', name: 'Privacy Policy', required: true, allowedFormats: 'PDF', maxSizeMb: 5 },
-    ],
-    verification: {
-      requireIdVerification: true,
-      requireFaceMatch: false,
-    },
-    autoIncludeDocs: ['terms-conditions', 'privacy-policy'],
-  },
-  {
-    id: 'type-004',
-    name: 'Travel Insurance',
-    code: 'TRAVEL_INSURANCE',
-    category: 'Insurance',
-    description: 'Travel insurance policy for individuals or groups',
-    expiryDays: 14,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Insurance Proposal', required: true, allowedFormats: 'PDF', maxSizeMb: 10 },
-      { id: 'doc-2', name: 'Terms & Conditions', required: true, allowedFormats: 'PDF', maxSizeMb: 5 },
-    ],
-    verification: {
-      requireIdVerification: false,
-      requireFaceMatch: false,
-    },
-    autoIncludeDocs: ['terms-conditions'],
-  },
-  {
-    id: 'type-005',
-    name: 'General Agreement',
-    code: 'GENERAL_AGREEMENT',
-    category: 'Contract',
-    description: 'General purpose agreement or contract',
-    expiryDays: 30,
-    requiredDocuments: [
-      { id: 'doc-1', name: 'Agreement Document', required: true, allowedFormats: 'PDF', maxSizeMb: 25 },
-    ],
-    verification: {
-      requireIdVerification: false,
-      requireFaceMatch: false,
-    },
-    autoIncludeDocs: [],
-  },
-]
-
-// Mock Customers (would come from API)
-const CUSTOMERS = [
-  { id: 'cust-001', name: 'Yiannis Kleanthous', email: 'yiannis.kleanthous@email.com', phone: '+357 99 123 456', type: 'individual' },
-  { id: 'cust-002', name: 'Charis Constantinou', email: 'charis.constantinou@email.com', phone: '+357 99 654 321', type: 'individual' },
-  { id: 'cust-003', name: 'Andreas Papadopoulos', email: 'andreas.p@email.com', phone: '+357 99 111 222', type: 'individual' },
-  { id: 'cust-004', name: 'Cyprus Trading Ltd', email: 'info@cyprustrading.com', phone: '+357 22 123 456', type: 'company' },
-  { id: 'cust-005', name: 'Tech Solutions Cyprus Ltd', email: 'contact@techsolutions.cy', phone: '+357 22 789 012', type: 'company' },
-]
+import { envelopesApi } from '../../../api/envelopesApi'
+import { customersApi } from '../../../api/customersApi'
+import { settingsApi } from '../../../api/settingsApi'
 
 const EnvelopeCreatePage = () => {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
+
+  // Fetch envelope types from API
+  const [envelopeTypes, setEnvelopeTypes] = useState([])
+  const [loadingTypes, setLoadingTypes] = useState(true)
+
+  useEffect(() => {
+    const fetchEnvelopeTypes = async () => {
+      try {
+        const data = await settingsApi.getEnvelopeTypes()
+        setEnvelopeTypes(data || [])
+      } catch (error) {
+        console.error('Failed to load envelope types:', error)
+        toast.error('Failed to load envelope types')
+      } finally {
+        setLoadingTypes(false)
+      }
+    }
+    fetchEnvelopeTypes()
+  }, [])
+
+  // Fetch customers from API
+  const { data: customersData } = useQuery({
+    queryKey: ['customers'],
+    queryFn: () => customersApi.getCustomers({ pageSize: 100 }),
+  })
+  const customers = customersData?.items || []
 
   // Signing methods
   const SIGNING_METHODS = [
@@ -194,22 +121,23 @@ const EnvelopeCreatePage = () => {
   const [customerSearch, setCustomerSearch] = useState('')
 
   // Get selected customer
-  const selectedCustomer = CUSTOMERS.find(c => c.id === formData.customerId)
+  const selectedCustomer = customers.find(c => c.id === formData.customerId)
 
   // Filter customers based on search
-  const filteredCustomers = CUSTOMERS.filter(c => 
-    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    c.email.toLowerCase().includes(customerSearch.toLowerCase())
-  )
+  const filteredCustomers = customers.filter(c => {
+    const name = c.displayName || c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim()
+    return name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+           (c.email || '').toLowerCase().includes(customerSearch.toLowerCase())
+  })
 
   // Handle envelope type selection
   const handleTypeChange = (typeId) => {
-    const type = ENVELOPE_TYPES.find(t => t.id === typeId)
+    const type = envelopeTypes.find(t => t.id === typeId)
     setSelectedType(type)
     setFormData(prev => ({
       ...prev,
       envelopeTypeId: typeId,
-      expiryDays: type?.expiryDays || 30,
+      expiryDays: type?.expiryDays || type?.defaultExpiryDays || 30,
     }))
     setUploadedDocuments({})
   }
@@ -289,11 +217,29 @@ const EnvelopeCreatePage = () => {
 
     setIsSubmitting(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Calculate expiry date based on selected type
+      const expiresAt = selectedType 
+        ? new Date(Date.now() + selectedType.expiryDays * 24 * 60 * 60 * 1000).toISOString()
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
+      // Create envelope via API
+      const envelopeData = {
+        name: formData.envelopeName || selectedType?.name || 'New Envelope',
+        description: selectedType?.description || '',
+        customerId: formData.customerId,
+        customerMessage: formData.customerMessage || null,
+        expiresAt: expiresAt,
+      }
+
+      const newEnvelope = await envelopesApi.createEnvelope(envelopeData)
+      const newEnvelopeId = newEnvelope.id
 
       if (action === 'send') {
-        // Generate a mock envelope ID
-        const newEnvelopeId = `env-${Date.now()}`
+        // Send the envelope after creation
+        await envelopesApi.sendEnvelope(newEnvelopeId, {
+          sendEmail: true,
+          customerMessage: formData.customerMessage,
+        })
         
         if (formData.signingMethod === 'digital_self_service') {
           toast.success('Envelope created and invitation sent!')
@@ -310,7 +256,8 @@ const EnvelopeCreatePage = () => {
         navigate('/portal/envelopes')
       }
     } catch (error) {
-      toast.error('Failed to create envelope')
+      console.error('Failed to create envelope:', error)
+      toast.error(error.response?.data?.message || 'Failed to create envelope')
     } finally {
       setIsSubmitting(false)
     }
@@ -352,10 +299,11 @@ const EnvelopeCreatePage = () => {
                   value={formData.envelopeTypeId}
                   onChange={(e) => handleTypeChange(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+                  disabled={loadingTypes}
                 >
-                  <option value="">Choose an envelope type...</option>
+                  <option value="">{loadingTypes ? 'Loading envelope types...' : 'Choose an envelope type...'}</option>
                   {Object.entries(
-                    ENVELOPE_TYPES.reduce((acc, type) => {
+                    envelopeTypes.reduce((acc, type) => {
                       if (!acc[type.category]) acc[type.category] = []
                       acc[type.category].push(type)
                       return acc
@@ -428,16 +376,16 @@ const EnvelopeCreatePage = () => {
                   {selectedCustomer ? (
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        selectedCustomer.type === 'company' ? 'bg-purple-100' : 'bg-blue-100'
+                        (selectedCustomer.customerType === 'Company' || selectedCustomer.type === 'company') ? 'bg-purple-100' : 'bg-blue-100'
                       }`}>
-                        {selectedCustomer.type === 'company' ? (
+                        {(selectedCustomer.customerType === 'Company' || selectedCustomer.type === 'company') ? (
                           <Building2 className="w-4 h-4 text-purple-600" />
                         ) : (
                           <User className="w-4 h-4 text-blue-600" />
                         )}
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{selectedCustomer.name}</p>
+                        <p className="font-medium text-gray-900">{selectedCustomer.displayName || selectedCustomer.name || `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim()}</p>
                         <p className="text-xs text-gray-500">{selectedCustomer.email}</p>
                       </div>
                     </div>
@@ -459,31 +407,35 @@ const EnvelopeCreatePage = () => {
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
-                    {filteredCustomers.map(customer => (
-                      <div
-                        key={customer.id}
-                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3"
-                        onClick={() => {
-                          setFormData(prev => ({ ...prev, customerId: customer.id }))
-                          setShowCustomerDropdown(false)
-                          setCustomerSearch('')
-                        }}
-                      >
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          customer.type === 'company' ? 'bg-purple-100' : 'bg-blue-100'
-                        }`}>
-                          {customer.type === 'company' ? (
-                            <Building2 className="w-4 h-4 text-purple-600" />
-                          ) : (
-                            <User className="w-4 h-4 text-blue-600" />
-                          )}
+                    {filteredCustomers.map(customer => {
+                      const customerName = customer.displayName || customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim()
+                      const isCompany = customer.customerType === 'Company' || customer.type === 'company'
+                      return (
+                        <div
+                          key={customer.id}
+                          className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, customerId: customer.id }))
+                            setShowCustomerDropdown(false)
+                            setCustomerSearch('')
+                          }}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            isCompany ? 'bg-purple-100' : 'bg-blue-100'
+                          }`}>
+                            {isCompany ? (
+                              <Building2 className="w-4 h-4 text-purple-600" />
+                            ) : (
+                              <User className="w-4 h-4 text-blue-600" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{customerName}</p>
+                            <p className="text-xs text-gray-500">{customer.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{customer.name}</p>
-                          <p className="text-xs text-gray-500">{customer.email}</p>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                     <div className="p-2 border-t border-gray-100">
                       <Link
                         to="/portal/customers/new"

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Plus,
@@ -13,74 +14,49 @@ import {
   FileText,
   Filter,
 } from 'lucide-react'
-
-const mockAgents = [
-  {
-    id: 'agent-001',
-    name: 'Maria Georgiou',
-    email: 'maria.g@hydrainsurance.com.cy',
-    phone: '+357 99 111 222',
-    idNumber: 'AG001',
-    broker: { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
-    status: 'active',
-    totalCustomers: 45,
-    totalEnvelopes: 120,
-    pendingEnvelopes: 8,
-    createdAt: '2023-01-15T10:00:00Z',
-  },
-  {
-    id: 'agent-002',
-    name: 'Andreas Papadopoulos',
-    email: 'andreas.p@hydrainsurance.com.cy',
-    phone: '+357 99 333 444',
-    idNumber: 'AG002',
-    broker: { id: 'broker-002', name: 'Mediterranean Insurance Services' },
-    status: 'active',
-    totalCustomers: 32,
-    totalEnvelopes: 89,
-    pendingEnvelopes: 5,
-    createdAt: '2023-03-20T14:30:00Z',
-  },
-  {
-    id: 'agent-003',
-    name: 'Nikos Konstantinou',
-    email: 'nikos.k@hydrainsurance.com.cy',
-    phone: '+357 99 555 666',
-    idNumber: 'AG003',
-    broker: { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
-    status: 'active',
-    totalCustomers: 28,
-    totalEnvelopes: 67,
-    pendingEnvelopes: 3,
-    createdAt: '2023-06-10T09:00:00Z',
-  },
-  {
-    id: 'agent-004',
-    name: 'Christina Antoniou',
-    email: 'christina.a@hydrainsurance.com.cy',
-    phone: '+357 99 777 888',
-    idNumber: 'AG004',
-    broker: { id: 'broker-003', name: 'Island Risk Solutions' },
-    status: 'inactive',
-    totalCustomers: 15,
-    totalEnvelopes: 34,
-    pendingEnvelopes: 0,
-    createdAt: '2023-09-05T11:00:00Z',
-  },
-]
-
-const mockBrokers = [
-  { id: 'broker-001', name: 'Cyprus Insurance Brokers Ltd' },
-  { id: 'broker-002', name: 'Mediterranean Insurance Services' },
-  { id: 'broker-003', name: 'Island Risk Solutions' },
-]
+import { usersApi } from '../../../api/usersApi'
+import Loading from '../../../shared/components/Loading'
 
 const AgentsListPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [brokerFilter, setBrokerFilter] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
-  const filteredAgents = mockAgents.filter((agent) => {
+  // Fetch agents from API
+  const { data: agents = [], isLoading } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => usersApi.getAgents(),
+  })
+
+  // Fetch brokers from API
+  const { data: brokers = [] } = useQuery({
+    queryKey: ['brokers'],
+    queryFn: () => usersApi.getBrokers(),
+  })
+
+  if (isLoading) {
+    return <Loading message="Loading agents..." />
+  }
+
+  // Transform agents to expected format
+  const transformedAgents = agents.map(agent => ({
+    id: agent.id,
+    name: `${agent.firstName || ''} ${agent.lastName || ''}`.trim() || agent.email,
+    email: agent.email || '',
+    phone: agent.phone || '',
+    idNumber: agent.businessKey || '',
+    broker: agent.brokerId ? {
+      id: agent.brokerId,
+      name: agent.brokerName || 'Unknown Broker',
+    } : { id: '', name: 'No Broker' },
+    status: agent.isActive ? 'active' : 'inactive',
+    totalCustomers: agent.customerCount || 0,
+    totalEnvelopes: agent.envelopeCount || 0,
+    pendingEnvelopes: agent.pendingEnvelopeCount || 0,
+    createdAt: agent.createdAt,
+  }))
+
+  const filteredAgents = transformedAgents.filter((agent) => {
     const matchesSearch =
       agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -129,8 +105,8 @@ const AgentsListPage = () => {
               className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
             >
               <option value="ALL">All Brokers</option>
-              {mockBrokers.map(broker => (
-                <option key={broker.id} value={broker.id}>{broker.name}</option>
+              {brokers.map(broker => (
+                <option key={broker.id} value={broker.id}>{broker.firstName} {broker.lastName}</option>
               ))}
             </select>
             <select
@@ -245,24 +221,24 @@ const AgentsListPage = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Agents</p>
-          <p className="text-2xl font-bold text-gray-900">{mockAgents.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{transformedAgents.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Active</p>
           <p className="text-2xl font-bold text-green-600">
-            {mockAgents.filter(a => a.status === 'active').length}
+            {transformedAgents.filter(a => a.status === 'active').length}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Customers</p>
           <p className="text-2xl font-bold text-blue-600">
-            {mockAgents.reduce((sum, a) => sum + a.totalCustomers, 0)}
+            {transformedAgents.reduce((sum, a) => sum + a.totalCustomers, 0)}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Pending Envelopes</p>
           <p className="text-2xl font-bold text-amber-600">
-            {mockAgents.reduce((sum, a) => sum + a.pendingEnvelopes, 0)}
+            {transformedAgents.reduce((sum, a) => sum + a.pendingEnvelopes, 0)}
           </p>
         </div>
       </div>

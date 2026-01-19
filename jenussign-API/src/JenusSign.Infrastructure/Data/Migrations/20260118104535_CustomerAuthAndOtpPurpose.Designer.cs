@@ -4,6 +4,7 @@ using JenusSign.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace JenusSign.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(JenusSignDbContext))]
-    partial class JenusSignDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260118104535_CustomerAuthAndOtpPurpose")]
+    partial class CustomerAuthAndOtpPurpose
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -683,97 +686,6 @@ namespace JenusSign.Infrastructure.Data.Migrations
                     b.ToTable("SigningSessions");
                 });
 
-            modelBuilder.Entity("JenusSign.Core.Entities.SystemLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid?>("CustomerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("CustomerName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("EnvelopeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("EnvelopeRef")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Metadata")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Severity")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("UserName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("EnvelopeId");
-
-                    b.HasIndex("EventType");
-
-                    b.HasIndex("Severity");
-
-                    b.HasIndex("Timestamp");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("SystemLogs");
-                });
-
             modelBuilder.Entity("JenusSign.Core.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1141,30 +1053,6 @@ namespace JenusSign.Infrastructure.Data.Migrations
                     b.Navigation("Envelope");
 
                     b.Navigation("Proposal");
-                });
-
-            modelBuilder.Entity("JenusSign.Core.Entities.SystemLog", b =>
-                {
-                    b.HasOne("JenusSign.Core.Entities.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("JenusSign.Core.Entities.Envelope", "Envelope")
-                        .WithMany()
-                        .HasForeignKey("EnvelopeId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("JenusSign.Core.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("Envelope");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("JenusSign.Core.Entities.User", b =>

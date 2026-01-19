@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -11,25 +11,18 @@ import {
   Save,
   UserCircle,
   Building2,
+  Loader2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-// Mock data for dropdowns
-const mockAgents = [
-  { id: 'agent-001', name: 'Maria Georgiou', broker: 'Cyprus Insurance Brokers' },
-  { id: 'agent-002', name: 'Andreas Papadopoulos', broker: 'Mediterranean Insurance' },
-  { id: 'agent-003', name: 'Nikos Konstantinou', broker: 'Cyprus Insurance Brokers' },
-]
-
-const mockEmployees = [
-  { id: 'emp-001', name: 'Elena Christodoulou', department: 'Sales' },
-  { id: 'emp-002', name: 'Nikos Stavrou', department: 'Underwriting' },
-  { id: 'emp-003', name: 'Anna Kyriacou', department: 'Claims' },
-]
+import { usersApi } from '../../../api/usersApi'
 
 const CustomerCreatePage = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [agents, setAgents] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [loadingAgents, setLoadingAgents] = useState(true)
+  const [loadingEmployees, setLoadingEmployees] = useState(true)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -44,6 +37,36 @@ const CustomerCreatePage = () => {
     assignedEmployeeId: '',
     notes: '',
   })
+
+  // Fetch agents and employees on mount
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const data = await usersApi.getAgents()
+        setAgents(data)
+      } catch (error) {
+        console.error('Failed to load agents:', error)
+        toast.error('Failed to load agents')
+      } finally {
+        setLoadingAgents(false)
+      }
+    }
+
+    const fetchEmployees = async () => {
+      try {
+        const data = await usersApi.getEmployees()
+        setEmployees(data)
+      } catch (error) {
+        console.error('Failed to load employees:', error)
+        toast.error('Failed to load employees')
+      } finally {
+        setLoadingEmployees(false)
+      }
+    }
+
+    fetchAgents()
+    fetchEmployees()
+  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -246,11 +269,12 @@ const CustomerCreatePage = () => {
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                   required
+                  disabled={loadingAgents}
                 >
-                  <option value="">Select an agent...</option>
-                  {mockAgents.map(agent => (
+                  <option value="">{loadingAgents ? 'Loading agents...' : 'Select an agent...'}</option>
+                  {agents.map(agent => (
                     <option key={agent.id} value={agent.id}>
-                      {agent.name} ({agent.broker})
+                      {agent.name} ({agent.brokerName || 'No broker'})
                     </option>
                   ))}
                 </select>
@@ -266,11 +290,12 @@ const CustomerCreatePage = () => {
                   value={formData.assignedEmployeeId}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+                  disabled={loadingEmployees}
                 >
-                  <option value="">None (Broker business only)</option>
-                  {mockEmployees.map(emp => (
+                  <option value="">{loadingEmployees ? 'Loading employees...' : 'None (Broker business only)'}</option>
+                  {employees.map(emp => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.department})
+                      {emp.name} ({emp.department || emp.role})
                     </option>
                   ))}
                 </select>
@@ -316,7 +341,7 @@ const CustomerCreatePage = () => {
               <div>
                 <p className="text-sm text-gray-500">Assigned Agent</p>
                 <p className="font-medium text-gray-900">
-                  {mockAgents.find(a => a.id === formData.assignedAgentId)?.name || '—'}
+                  {agents.find(a => a.id === formData.assignedAgentId)?.name || '—'}
                 </p>
               </div>
             </div>

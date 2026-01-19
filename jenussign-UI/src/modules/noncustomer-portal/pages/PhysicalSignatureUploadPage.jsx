@@ -28,43 +28,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '../../../shared/store/authStore'
-
-// Mock envelope data
-const MOCK_ENVELOPES = {
-  'env-001': {
-    id: 'env-001',
-    reference: 'PR-2025-0001',
-    title: 'Home Insurance Proposal',
-    customer: {
-      id: 'cust-001',
-      name: 'Yiannis Kleanthous',
-      email: 'yiannis.kleanthous@email.com',
-      mobile: '+357 99 123 456',
-      idNumber: 'X1234567',
-    },
-    documents: [
-      { id: 'doc-1', name: 'Home Insurance Proposal', pages: 4, url: '/samples/proposal.pdf' },
-      { id: 'doc-2', name: 'Terms & Conditions', pages: 3, url: '/samples/terms.pdf' },
-      { id: 'doc-3', name: 'Privacy Policy', pages: 2, url: '/samples/privacy.pdf' },
-    ],
-  },
-  'env-002': {
-    id: 'env-002',
-    reference: 'PR-2025-0002',
-    title: 'Motor Insurance Proposal',
-    customer: {
-      id: 'cust-002',
-      name: 'Charis Constantinou',
-      email: null,
-      mobile: '+357 99 654 321',
-      idNumber: 'M7654321',
-    },
-    documents: [
-      { id: 'doc-1', name: 'Motor Insurance Proposal', pages: 4, url: '/samples/proposal.pdf' },
-      { id: 'doc-2', name: 'Terms & Conditions', pages: 3, url: '/samples/terms.pdf' },
-    ],
-  },
-}
+import { envelopesApi } from '../../../api/envelopesApi'
 
 // Signing steps
 const STEPS = {
@@ -83,7 +47,7 @@ const PhysicalSignatureUploadPage = () => {
 
   // State
   const [currentStep, setCurrentStep] = useState(STEPS.PRINT_DOCUMENTS)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [envelope, setEnvelope] = useState(null)
 
   // Print state
@@ -113,15 +77,40 @@ const PhysicalSignatureUploadPage = () => {
   const [otpResendTimer, setOtpResendTimer] = useState(0)
   const otpInputRefs = useRef([])
 
-  // Load envelope
+  // Load envelope from API
   useEffect(() => {
-    const env = MOCK_ENVELOPES[envelopeId]
-    if (env) {
-      setEnvelope(env)
-      const printed = {}
-      env.documents.forEach(doc => { printed[doc.id] = false })
-      setPrintedDocuments(printed)
+    const fetchEnvelope = async () => {
+      try {
+        setIsLoading(true)
+        const data = await envelopesApi.getEnvelope(envelopeId)
+        if (data) {
+          // Transform API response to expected format
+          const env = {
+            id: data.id,
+            reference: data.businessKey || data.reference || '',
+            title: data.name || data.title || '',
+            customer: {
+              id: data.customerId,
+              name: data.customerName || '',
+              email: data.customerEmail || null,
+              mobile: data.customerPhone || data.customerMobile || null,
+              idNumber: data.customerIdNumber || '',
+            },
+            documents: data.documents || [],
+          }
+          setEnvelope(env)
+          const printed = {}
+          env.documents.forEach(doc => { printed[doc.id] = false })
+          setPrintedDocuments(printed)
+        }
+      } catch (error) {
+        console.error('Failed to load envelope:', error)
+        toast.error('Failed to load envelope')
+      } finally {
+        setIsLoading(false)
+      }
     }
+    fetchEnvelope()
   }, [envelopeId])
 
   // OTP resend timer

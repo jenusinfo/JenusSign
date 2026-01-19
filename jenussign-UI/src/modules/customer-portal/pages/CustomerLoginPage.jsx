@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-import { envelopesApi } from '../../../api/envelopesApi'
+import { customerAuthApi } from '../../../api/customerAuthApi'
 import useAuthStore from '../../../shared/store/authStore'
 import { TrustIndicatorBar } from '../../../shared/components/ComplianceBadges'
 import { componentPresets, animations } from '../../../shared/constants/designSystem'
@@ -34,6 +34,7 @@ const CustomerLoginPage = () => {
   const [step, setStep] = useState('email') // 'email' | 'otp'
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
+  const [otpToken, setOtpToken] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleRequestOtp = async (e) => {
@@ -45,8 +46,8 @@ const CustomerLoginPage = () => {
 
     setLoading(true)
     try {
-      // In production, this would send actual OTP
-      await envelopesApi.sendOtp(null, 'EMAIL')
+      const result = await customerAuthApi.requestOtp(email, 'EMAIL')
+      setOtpToken(result.otpToken)
       toast.success('OTP sent to your email')
       setStep('otp')
     } catch (error) {
@@ -65,15 +66,16 @@ const CustomerLoginPage = () => {
 
     setLoading(true)
     try {
-      await envelopesApi.verifyOtp(null, otp)
+      const result = await customerAuthApi.verifyOtp(otpToken, otp)
       
-      // Create customer session
-      const customer = {
-        email,
-        name: email.split('@')[0], // Demo: use email prefix as name
+      // Set customer auth from API response
+      const customer = result.customer || {
+        id: result.customerId,
+        email: result.email || email,
+        displayName: result.displayName || result.name || email.split('@')[0],
       }
       
-      setCustomerAuth('demo-token', customer)
+      setCustomerAuth(result.accessToken, customer, result.refreshToken)
       toast.success('Login successful')
       navigate('/customer/dashboard')
     } catch (error) {

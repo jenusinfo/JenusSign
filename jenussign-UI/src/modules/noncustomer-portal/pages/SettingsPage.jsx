@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Settings,
@@ -21,27 +22,35 @@ import {
   ClipboardCheck,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { settingsApi } from '../../../api/settingsApi'
+import Loading from '../../../shared/components/Loading'
 import EnvelopeTypesSettings from './EnvelopeTypesSettings'
 import ConsentDefinitionsSettings from './ConsentDefinitionsSettings'
 
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('company')
-  const [saving, setSaving] = useState(false)
-  const [testingConnection, setTestingConnection] = useState(false)
+  const queryClient = useQueryClient()
 
+  // Fetch settings from API
+  const { data: settingsData, isLoading } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsApi.getSettings,
+  })
+
+  // Local state for form editing
   const [companySettings, setCompanySettings] = useState({
-    companyName: 'Hydra Insurance Ltd',
-    companyEmail: 'info@hydrainsurance.com.cy',
-    companyPhone: '+357 22 123 456',
-    address: '123 Makarios Avenue, Nicosia, Cyprus',
-    website: 'https://www.hydrainsurance.com.cy',
-    vatNumber: 'CY12345678X',
+    companyName: '',
+    companyEmail: '',
+    companyPhone: '',
+    address: '',
+    website: '',
+    vatNumber: '',
   })
 
   const [emailSettings, setEmailSettings] = useState({
     senderName: 'JenusSign',
-    senderEmail: 'noreply@jenussign.com',
-    replyTo: 'support@hydrainsurance.com.cy',
+    senderEmail: '',
+    replyTo: '',
     enableReminders: true,
     reminderDays: 3,
   })
@@ -53,18 +62,52 @@ const SettingsPage = () => {
     otpChannel: 'email',
   })
 
-  // Certificate/eSeal settings (non-sensitive display only)
-  const [certificateSettings, setCertificateSettings] = useState({
-    eSealEnabled: true,
+  // Initialize form with API data
+  useEffect(() => {
+    if (settingsData) {
+      setCompanySettings({
+        companyName: settingsData.companyName || '',
+        companyEmail: settingsData.supportEmail || '',
+        companyPhone: '',
+        address: '',
+        website: settingsData.baseUrl || '',
+        vatNumber: '',
+      })
+      setEmailSettings(prev => ({
+        ...prev,
+        enableReminders: settingsData.enableEmailNotifications ?? true,
+      }))
+      setSigningSettings(prev => ({
+        ...prev,
+        defaultExpiry: settingsData.signingLinkExpiryDays || 7,
+      }))
+    }
+  }, [settingsData])
+
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: settingsApi.updateSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['settings'])
+      toast.success('Settings saved successfully!')
+    },
+    onError: () => {
+      toast.error('Failed to save settings')
+    },
+  })
+
+  // Certificate/eSeal settings (from API or defaults)
+  const certificateSettings = {
+    eSealEnabled: settingsData?.keyVaultConfigured ?? false,
     eSealDisplayName: 'JenusSign Qualified eSeal',
     tsaEnabled: true,
     tsaUrl: 'https://freetsa.org/tsr',
-  })
+  }
 
-  // Mock certificate status (would come from API)
+  // Certificate status (would come from a health check endpoint)
   const certificateStatus = {
     eSeal: {
-      status: 'valid', // valid, expiring, expired, error
+      status: settingsData?.keyVaultConfigured ? 'valid' : 'disconnected',
       issuer: 'JCC Cyprus Trust Center',
       subject: 'CN=JenusSign, O=Hydra Insurance Ltd, C=CY',
       serialNumber: 'AB:CD:EF:12:34:56:78:90',
@@ -72,24 +115,28 @@ const SettingsPage = () => {
       validTo: '2026-01-15',
       keyVaultName: 'kv-jenussign-prod',
       certificateName: 'JenusSign-eSeal-Certificate',
-      lastUsed: '2025-01-17T10:30:00Z',
+      lastUsed: new Date().toISOString(),
     },
     tsa: {
       status: 'connected',
-      lastResponse: '2025-01-17T10:30:00Z',
+      lastResponse: new Date().toISOString(),
       responseTime: '245ms',
     },
     jccApi: {
       status: 'connected',
-      lastHealthCheck: '2025-01-17T10:00:00Z',
+      lastHealthCheck: new Date().toISOString(),
     },
   }
 
+  const [testingConnection, setTestingConnection] = useState(false)
+
   const handleSave = async () => {
-    setSaving(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setSaving(false)
-    toast.success('Settings saved successfully!')
+    updateMutation.mutate({
+      companyName: companySettings.companyName,
+      supportEmail: companySettings.companyEmail,
+      signingLinkExpiryDays: signingSettings.defaultExpiry,
+      enableEmailNotifications: emailSettings.enableReminders,
+    })
   }
 
   const handleTestConnection = async (service) => {
@@ -141,6 +188,12 @@ const SettingsPage = () => {
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ]
+
+  if (isLoading) {
+    return <Loading message="Loading settings..." />
+  }
+
+  const saving = updateMutation.isPending
 
   return (
     <div className="space-y-6">

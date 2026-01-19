@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '../../../shared/store/authStore'
+import { authApi } from '../../../api/authApi'
 
 const AgentLoginPage = () => {
   const navigate = useNavigate()
@@ -41,26 +42,24 @@ const AgentLoginPage = () => {
     setLoading(true)
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Call actual login API
+      const result = await authApi.login(formData.email, formData.password)
 
-      // Mock user data - in production this would come from API
-      const mockUser = {
-        id: 'user-001',
-        name: 'User',
-        email: formData.email,
-        role: formData.email.includes('admin') ? 'admin' : 'agent',
+      // Backend returns: { requiresOtp, accessToken, refreshToken, user: { id, displayName, email, role, ... } }
+      const user = {
+        id: result.user?.id || result.userId,
+        name: result.user?.displayName || result.user?.firstName + ' ' + result.user?.lastName || result.displayName,
+        email: result.user?.email || result.email || formData.email,
+        role: result.user?.role || result.role,
+        businessKey: result.user?.businessKey,
         company: 'Hydra Insurance Ltd',
       }
 
-      // Generate mock token
-      const mockToken = 'mock-jwt-token-' + Date.now()
-
       // Set auth state using BOTH methods for compatibility
-      setAgentAuth(mockToken, mockUser)
-      setAuth(mockToken, mockUser)
+      setAgentAuth(result.accessToken, user, result.refreshToken)
+      setAuth(result.accessToken, user)
 
-      toast.success(`Welcome back, ${mockUser.name}!`)
+      toast.success(`Welcome back, ${user.name}!`)
       
       // Small delay to ensure state is persisted before navigation
       setTimeout(() => {
@@ -69,7 +68,7 @@ const AgentLoginPage = () => {
 
     } catch (error) {
       console.error('Login error:', error)
-      toast.error('Login failed. Please try again.')
+      toast.error(error.response?.data?.message || 'Login failed. Please try again.')
     } finally {
       setLoading(false)
     }

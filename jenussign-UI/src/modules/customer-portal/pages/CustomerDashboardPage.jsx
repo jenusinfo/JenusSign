@@ -51,9 +51,9 @@ const CustomerDashboardPage = () => {
 
   // Fetch customer envelopes using the unified envelope API
   const { data: envelopes = [], isLoading } = useQuery({
-    queryKey: ['customer-envelopes', customer?.email],
-    queryFn: () => envelopesApi.getCustomerEnvelopes(customer?.email),
-    enabled: !!customer?.email,
+    queryKey: ['customer-envelopes', customer?.id],
+    queryFn: () => envelopesApi.getCustomerEnvelopes(),
+    enabled: !!customer,
   })
 
   const handleLogout = () => {

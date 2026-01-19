@@ -12,6 +12,7 @@ using JenusSign.Infrastructure.Services.Email.Providers;
 using JenusSign.Infrastructure.Services.Pdf;
 using JenusSign.Infrastructure.Services.Signing;
 using JenusSign.Infrastructure.Services.Sms;
+using JenusSign.Infrastructure.Services.Sms.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -74,13 +75,29 @@ if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddScoped<ISigningService, LocalSigningService>();
     builder.Services.AddScoped<ITimestampService, LocalTimestampService>();
-    builder.Services.AddScoped<ISmsService, MockSmsService>();
 }
 else
 {
     builder.Services.AddScoped<ISigningService, AzureKeyVaultSigningService>();
     builder.Services.AddHttpClient<ITimestampService, TimestampService>();
+}
+
+// SMS configuration - use Brevo by default, can switch to Twilio or Mock
+builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
+builder.Services.Configure<BrevoSmsOptions>(builder.Configuration.GetSection(BrevoSmsOptions.SectionName));
+
+var smsProvider = builder.Configuration.GetValue<string>("Sms:Provider") ?? "Mock";
+if (smsProvider.Equals("Brevo", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<ISmsService, BrevoSmsService>();
+}
+else if (smsProvider.Equals("Twilio", StringComparison.OrdinalIgnoreCase))
+{
     builder.Services.AddScoped<ISmsService, TwilioSmsService>();
+}
+else
+{
+    builder.Services.AddScoped<ISmsService, MockSmsService>();
 }
 
 // Email configuration options

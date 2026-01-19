@@ -1,40 +1,37 @@
 using JenusSign.Core.Entities;
 using JenusSign.Core.Interfaces;
-using MailKit.Net.Smtp;
-using MailKit.Security;
-using Microsoft.Extensions.Configuration;
+using JenusSign.Infrastructure.Services.Email.Models;
+using JenusSign.Infrastructure.Services.Email.Providers;
 using Microsoft.Extensions.Logging;
-using MimeKit;
+using Microsoft.Extensions.Options;
 
 namespace JenusSign.Infrastructure.Services.Email;
 
 /// <summary>
-/// Email service implementation using MailKit
+/// Email service implementation with support for multiple providers (SMTP/Gmail, Brevo)
 /// </summary>
 public class EmailService : IEmailService
 {
-    private readonly IConfiguration _configuration;
     private readonly ILogger<EmailService> _logger;
-    private readonly string _smtpHost;
-    private readonly int _smtpPort;
-    private readonly string _smtpUsername;
-    private readonly string _smtpPassword;
-    private readonly string _fromEmail;
-    private readonly string _fromName;
-    private readonly string _baseUrl;
+    private readonly IEmailProvider _emailProvider;
+    private readonly EmailOptions _emailOptions;
+    private readonly MailSettings _mailSettings;
 
-    public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+    public EmailService(
+        IEnumerable<IEmailProvider> emailProviders,
+        IOptions<EmailOptions> emailOptions,
+        IOptions<MailSettings> mailSettings,
+        ILogger<EmailService> logger)
     {
-        _configuration = configuration;
         _logger = logger;
+        _emailOptions = emailOptions.Value;
+        _mailSettings = mailSettings.Value;
         
-        _smtpHost = configuration["Email:SmtpHost"] ?? "smtp.office365.com";
-        _smtpPort = configuration.GetValue<int>("Email:SmtpPort", 587);
-        _smtpUsername = configuration["Email:Username"] ?? "";
-        _smtpPassword = configuration["Email:Password"] ?? "";
-        _fromEmail = configuration["Email:FromEmail"] ?? "noreply@jenussign.com";
-        _fromName = configuration["Email:FromName"] ?? "JenusSign";
-        _baseUrl = configuration["App:BaseUrl"] ?? "https://jenussign.jenusplanet.com";
+        // Select the configured email provider
+        _emailProvider = emailProviders.FirstOrDefault(p => p.ProviderType == _emailOptions.Provider)
+            ?? throw new InvalidOperationException($"No email provider found for type: {_emailOptions.Provider}");
+        
+        _logger.LogInformation("EmailService initialized with provider: {Provider}", _emailOptions.Provider);
     }
 
     public async Task<bool> SendSigningRequestAsync(Customer customer, string accessUrl, string? message, CancellationToken cancellationToken = default)
@@ -42,9 +39,9 @@ public class EmailService : IEmailService
         try
         {
             var subject = "Document Signing Request - Action Required";
-            var body = BuildSigningRequestEmail(customer.DisplayName, accessUrl, message);
+            var htmlBody = BuildSigningRequestEmail(customer.DisplayName, accessUrl, message);
             
-            return await SendEmailAsync(customer.Email, subject, body, cancellationToken);
+            return await SendEmailAsync(customer.Email, customer.DisplayName, subject, htmlBody, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -58,9 +55,9 @@ public class EmailService : IEmailService
         try
         {
             var subject = "Your Verification Code - JenusSign";
-            var body = BuildOtpEmail(otpCode);
+            var htmlBody = BuildOtpEmail(otpCode);
             
-            return await SendEmailAsync(email, subject, body, cancellationToken);
+            return await SendEmailAsync(email, null, subject, htmlBody, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -74,9 +71,9 @@ public class EmailService : IEmailService
         try
         {
             var subject = "Document Signed Successfully - JenusSign";
-            var body = BuildSigningCompletedEmail(customer.DisplayName, downloadUrl);
+            var htmlBody = BuildSigningCompletedEmail(customer.DisplayName, downloadUrl);
             
-            return await SendEmailAsync(customer.Email, subject, body, cancellationToken);
+            return await SendEmailAsync(customer.Email, customer.DisplayName, subject, htmlBody, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -90,9 +87,9 @@ public class EmailService : IEmailService
         try
         {
             var subject = "Reminder: Document Awaiting Your Signature - JenusSign";
-            var body = BuildReminderEmail(customer.DisplayName, accessUrl);
+            var htmlBody = BuildReminderEmail(customer.DisplayName, accessUrl);
             
-            return await SendEmailAsync(customer.Email, subject, body, cancellationToken);
+            return await SendEmailAsync(customer.Email, customer.DisplayName, subject, htmlBody, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -101,42 +98,38 @@ public class EmailService : IEmailService
         }
     }
 
-    private async Task<bool> SendEmailAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken)
+    private async Task<bool> SendEmailAsync(string toEmail, string? toName, string subject, string htmlBody, CancellationToken cancellationToken)
     {
-        try
+        var message = new EmailMessage
         {
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(_fromName, _fromEmail));
-            message.To.Add(new MailboxAddress(string.Empty, toEmail));
-            message.Subject = subject;
-            
-            var bodyBuilder = new BodyBuilder
+            From = new EmailContact
             {
-                HtmlBody = htmlBody,
-                TextBody = HtmlToPlainText(htmlBody)
-            };
-            
-            message.Body = bodyBuilder.ToMessageBody();
-            
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_smtpHost, _smtpPort, SecureSocketOptions.StartTls, cancellationToken);
-            
-            if (!string.IsNullOrEmpty(_smtpUsername))
+                Name = _mailSettings.DisplayName,
+                Email = _mailSettings.Mail
+            },
+            To = new List<EmailContact>
             {
-                await client.AuthenticateAsync(_smtpUsername, _smtpPassword, cancellationToken);
-            }
-            
-            await client.SendAsync(message, cancellationToken);
-            await client.DisconnectAsync(true, cancellationToken);
-            
-            _logger.LogInformation("Email sent successfully to {Email}: {Subject}", toEmail, subject);
-            return true;
-        }
-        catch (Exception ex)
+                new EmailContact { Name = toName, Email = toEmail }
+            },
+            Subject = subject,
+            HtmlContent = htmlBody,
+            TextContent = HtmlToPlainText(htmlBody)
+        };
+        
+        var result = await _emailProvider.SendAsync(message, cancellationToken);
+        
+        if (result.IsSuccess)
         {
-            _logger.LogError(ex, "Failed to send email to {Email}", toEmail);
-            return false;
+            _logger.LogInformation("Email sent successfully to {Email} via {Provider}: {Subject}", 
+                toEmail, _emailOptions.Provider, subject);
         }
+        else
+        {
+            _logger.LogWarning("Failed to send email to {Email} via {Provider}: {Error}", 
+                toEmail, _emailOptions.Provider, result.ErrorMessage);
+        }
+        
+        return result.IsSuccess;
     }
 
     private string BuildSigningRequestEmail(string customerName, string accessUrl, string? customMessage)

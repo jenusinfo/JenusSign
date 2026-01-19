@@ -7,6 +7,8 @@ using JenusSign.Infrastructure.Data;
 using JenusSign.Infrastructure.Repositories;
 using JenusSign.Infrastructure.Services;
 using JenusSign.Infrastructure.Services.Email;
+using JenusSign.Infrastructure.Services.Email.Models;
+using JenusSign.Infrastructure.Services.Email.Providers;
 using JenusSign.Infrastructure.Services.Pdf;
 using JenusSign.Infrastructure.Services.Signing;
 using JenusSign.Infrastructure.Services.Sms;
@@ -81,6 +83,16 @@ else
     builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 }
 
+// Email configuration options
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.Configure<MailSettings>(builder.Configuration.GetSection(MailSettings.SectionName));
+builder.Services.Configure<BrevoOptions>(builder.Configuration.GetSection(BrevoOptions.SectionName));
+
+// Email providers - register all providers, EmailService will select based on configuration
+builder.Services.AddScoped<IEmailProvider, SmtpEmailProvider>();
+builder.Services.AddHttpClient<IEmailProvider, BrevoEmailProvider>();
+
+// Email service (uses configured provider)
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
